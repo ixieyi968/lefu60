@@ -33,6 +33,7 @@ type Photo = {
   name: string;
   caption: string;
   rotation: string;
+  imageClass?: string;
 };
 
 type WallNote = {
@@ -52,18 +53,12 @@ const schedule = [
 
 const initialPhotos: Photo[] = [
   {
-    id: "bbq-2025-1",
-    src: "/bbq-2025-1.jpg",
-    name: "浦江郊野公园烧烤趴",
-    caption: "2025 浦江郊野公园烧烤趴",
-    rotation: "rotate-[-2deg]",
-  },
-  {
     id: "bbq-2025-2",
     src: "/bbq-2025-2.jpg",
     name: "浦江郊野公园烧烤趴",
     caption: "2025 浦江郊野公园烧烤趴",
-    rotation: "rotate-[1.5deg]",
+    rotation: "rotate-[1deg]",
+    imageClass: "rotate-[-90deg] scale-[1.35]",
   },
   {
     id: "teachers-day-2025",
@@ -74,26 +69,7 @@ const initialPhotos: Photo[] = [
   },
 ];
 
-const initialWallNotes: WallNote[] = [
-  {
-    id: "wish-1",
-    author: "老同门 A",
-    avatar: "A",
-    text: "愿张老师生日快乐，科研长青，饭局常在。",
-  },
-  {
-    id: "wish-2",
-    author: "实验室 B",
-    avatar: "B",
-    text: "这次不汇报、不组会，只负责开心相聚。",
-  },
-  {
-    id: "wish-3",
-    author: "毕业生 C",
-    avatar: "C",
-    text: "毕业多年还能被喊回家吃饭，真好。",
-  },
-];
+const initialWallNotes: WallNote[] = [];
 
 function getTimeLeft() {
   const diff = Math.max(eventDate.getTime() - Date.now(), 0);
@@ -131,6 +107,7 @@ export default function Home() {
     contact: "",
     message: "",
   });
+  const rollingWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
 
   useEffect(() => {
     setTimeLeft(getTimeLeft());
@@ -289,7 +266,7 @@ export default function Home() {
 
         <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-5 text-center">
           <h1 className="max-w-5xl text-[31px] font-bold leading-tight text-[#162033] sm:text-5xl lg:text-6xl">
-            <span className="block whitespace-nowrap">六十正当年，长聘也到手🎉</span>
+            <span className="block whitespace-nowrap">人生一甲子🎉乐福正当时</span>
             <span className="mt-3 block">你导喊你回家吃饭啦!⛷️</span>
           </h1>
           <p className="mt-8 text-lg font-medium text-[#263145] sm:text-xl">
@@ -319,12 +296,9 @@ export default function Home() {
             className="h-auto w-full sm:absolute sm:inset-0 sm:h-full sm:object-cover sm:object-center"
           />
           <div className="absolute inset-x-5 top-5 z-20 flex items-center justify-between sm:hidden">
-            <a href="#rsvp" className="text-sm font-semibold tracking-[0.14em] text-[#62715f]">
+            <span className="text-sm font-semibold tracking-[0.14em] text-[#62715f]">
               LEFU60.BEER
-            </a>
-            <a href="#rsvp" className="text-sm font-semibold tracking-[0.14em] text-[#62715f]">
-              60正青春
-            </a>
+            </span>
           </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-[#eef0ec] sm:inset-0 sm:h-auto sm:bg-[radial-gradient(ellipse_at_50%_30%,rgba(238,240,236,0)_0%,rgba(238,240,236,0.04)_16%,rgba(238,240,236,0.38)_40%,rgba(238,240,236,0.86)_82%)]" />
           <div className="absolute inset-0 hidden bg-[linear-gradient(180deg,rgba(238,240,236,0)_0%,rgba(238,240,236,0.16)_34%,rgba(238,240,236,0.78)_66%,rgba(238,240,236,0.94)_100%)] sm:block" />
@@ -357,13 +331,13 @@ export default function Home() {
             </a>
           </header>
 
-          <div className="-mt-20 max-w-5xl rounded-t-[28px] bg-[#eef0ec]/90 pb-4 pt-8 backdrop-blur-sm sm:mt-0 sm:bg-transparent sm:pb-10 sm:pt-[38vh] sm:backdrop-blur-none lg:pt-[34vh]">
-            <p className="mb-4 hidden items-center gap-2 rounded-full border border-[#73836f]/35 bg-white/76 px-4 py-2 text-sm font-medium text-[#4e604a] shadow-sm backdrop-blur sm:mb-5 sm:inline-flex sm:text-base">
+          <div className="-mt-20 max-w-5xl rounded-t-[28px] bg-[#eef0ec]/90 pb-2 pt-8 backdrop-blur-sm sm:mt-0 sm:bg-transparent sm:pb-8 sm:pt-[38vh] sm:backdrop-blur-none lg:pt-[34vh]">
+            <p className="absolute -mt-5 inline-flex items-center gap-1 text-xs font-semibold tracking-[0.04em] text-[#62715f] sm:static sm:mb-5 sm:gap-2 sm:rounded-full sm:border sm:border-[#73836f]/35 sm:bg-white/76 sm:px-4 sm:py-2 sm:text-base sm:font-medium sm:text-[#4e604a] sm:shadow-sm sm:backdrop-blur">
               <PartyPopper className="h-4 w-4" aria-hidden="true" />
               60正青春，Lab再集合
             </p>
             <h1 className="font-serif text-[29px] font-bold leading-tight text-[#20251f] min-[390px]:text-[31px] sm:text-5xl lg:text-6xl">
-              <span className="block whitespace-nowrap">六十正当年，长聘也到手。</span>
+              <span className="block whitespace-nowrap">六十正当年🎉长聘也到手。</span>
               <span className="mt-3 block text-[#6b7f5f]">你导喊你回家吃饭啦!</span>
             </h1>
             <div className="mt-8 grid max-w-[660px] gap-3 text-base sm:grid-cols-[270px_375px]">
@@ -402,7 +376,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="plan" className="mx-auto grid max-w-6xl gap-10 px-5 pb-14 pt-8 sm:px-8 sm:py-14 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-end lg:px-10">
+      <section id="plan" className="mx-auto grid max-w-6xl gap-8 px-5 pb-9 pt-5 sm:px-8 sm:pb-12 sm:pt-8 lg:-mt-14 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-end lg:px-10">
         <div className="flex min-h-full flex-col">
           <div>
             <p className="mb-3 text-sm font-semibold text-[#7f6344]">Happy Birthday</p>
@@ -501,7 +475,7 @@ export default function Home() {
           </form>
         </div>
         </div>
-        <div className="lg:self-end">
+        <div className="hidden lg:block lg:self-end">
           <figure className="rotate-[-2deg] overflow-hidden rounded-md border border-[#d9dfd3] bg-white p-2 shadow-xl shadow-[#41533c]/15">
             <img
               src="/birthday-invitation.png"
@@ -513,11 +487,11 @@ export default function Home() {
       </section>
 
       <section className="bg-[#f8f7f2]">
-        <div className="mx-auto max-w-6xl px-5 py-16 sm:px-8 lg:px-10">
+        <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
           <p className="mb-3 text-sm font-semibold text-[#7f6344]">照片墙</p>
           <div className="lg:w-[1000px]">
             <h2 className="font-serif text-3xl font-bold sm:text-4xl">把照片也带回来。</h2>
-            <p className="mt-5 text-lg leading-8 text-[#4d564a]">
+            <p className="mt-4 text-base leading-7 text-[#4d564a] sm:text-lg sm:leading-8">
               翻翻旧手机、硬盘和云盘。毕业照、实验室日常、团建、出差，还有那些当年觉得好笑、现在越看越有意思的照片。当然，和家人的合照、近照也欢迎，方便大家看看这些年彼此都“更新”成什么版本了。😂
             </p>
             <input
@@ -532,7 +506,7 @@ export default function Home() {
               type="button"
               onClick={choosePhotos}
               disabled={isUploadingPhotos}
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isUploadingPhotos ? "正在上传..." : "上传珍贵史料"}
             </button>
@@ -542,11 +516,11 @@ export default function Home() {
               </p>
             )}
           </div>
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:items-start">
+          <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3 lg:items-start">
             {photos.map((photo, index) => (
               <figure
                 key={photo.id}
-                className={`relative rounded-sm border border-[#e3dccb] bg-white p-3 pb-5 shadow-xl shadow-[#41533c]/15 transition hover:z-10 hover:scale-[1.02] ${photo.rotation} ${
+                className={`relative rounded-sm border border-[#e3dccb] bg-white p-2 pb-4 shadow-xl shadow-[#41533c]/15 transition hover:z-10 hover:scale-[1.02] sm:p-3 sm:pb-5 ${photo.rotation} ${
                   index === 1 ? "sm:mt-10" : index === 2 ? "sm:mt-3" : ""
                 }`}
               >
@@ -554,9 +528,9 @@ export default function Home() {
                 <img
                   src={photo.src}
                   alt={photo.name}
-                  className="aspect-[4/3] w-full rounded-[2px] object-cover"
+                  className={`aspect-[4/3] w-full rounded-[2px] object-cover ${photo.imageClass ?? ""}`}
                 />
-                <figcaption className="mt-3 font-serif text-lg font-bold leading-6 text-[#253024]">
+                <figcaption className="mt-3 font-serif text-sm font-bold leading-5 text-[#253024] sm:text-lg sm:leading-6">
                   {photo.caption}
                 </figcaption>
               </figure>
@@ -565,29 +539,30 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 py-16 sm:px-8 lg:px-10">
+      <section className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
         <style>{`
           @keyframes guest-roll {
-            from { transform: translateX(0); }
-            to { transform: translateX(-50%); }
+            from { transform: translateY(0); }
+            to { transform: translateY(-50%); }
           }
           .guest-roll-track {
-            animation: guest-roll 28s linear infinite;
+            animation: guest-roll 24s linear infinite;
           }
           .guest-roll-track:hover {
             animation-play-state: paused;
           }
         `}</style>
-        <p className="mb-3 text-sm font-semibold text-[#7f6344]">Guest Wall</p>
+        <p className="mb-3 text-sm font-semibold text-[#7f6344]">留言墙</p>
         <h2 className="font-serif text-3xl font-bold sm:text-4xl">先说两句，见面再聊。</h2>
-        <div className="mt-7 overflow-hidden border-y border-[#d8ddd3] bg-[#f8f7f2] py-4">
-          <div className="guest-roll-track flex w-max gap-4 pr-4">
-            {wallNotes.map((note) => (
+        <div className="mt-5 h-56 overflow-hidden border-y border-[#d8ddd3] bg-[#f8f7f2] py-4 sm:mt-7 sm:h-64">
+          {rollingWallNotes.length ? (
+          <div className="guest-roll-track flex flex-col gap-3">
+            {rollingWallNotes.map((note, index) => (
               <blockquote
-                key={note.id}
-                className="flex min-h-24 w-[320px] shrink-0 items-start gap-3 rounded-full border border-[#d9dfd3] bg-white/86 px-5 py-4 leading-7 text-[#4d564a] shadow-sm backdrop-blur"
+                key={`${note.id}-${index}`}
+                className="flex min-h-20 items-start gap-3 rounded-md border border-[#d9dfd3] bg-white/86 px-4 py-3 text-sm leading-6 text-[#4d564a] shadow-sm backdrop-blur"
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#5f7657] font-serif text-lg font-bold text-white">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5f7657] font-serif text-sm font-bold text-white">
                   {note.avatar}
                 </span>
                 <span className="min-w-0">
@@ -595,11 +570,16 @@ export default function Home() {
                     {note.author}：
                     {note.status && <span className="ml-2 text-xs text-[#6b7f5f]">{note.status}</span>}
                   </span>
-                  <span className="block text-base">“{note.text}”</span>
+                  <span className="block text-sm">“{note.text}”</span>
                 </span>
               </blockquote>
             ))}
           </div>
+          ) : (
+            <div className="flex h-full items-center justify-center px-4 text-center text-sm leading-6 text-[#6b7f5f]">
+              留言提交后，会在这里滚动显示。
+            </div>
+          )}
         </div>
       </section>
 
