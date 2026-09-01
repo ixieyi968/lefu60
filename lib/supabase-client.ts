@@ -1,5 +1,3 @@
-import type { Rsvp } from "@/app/page";
-
 export type RemotePhoto = {
   id: string;
   src: string;
@@ -12,6 +10,14 @@ export type RemoteWallNote = {
   author: string;
   avatar: string;
   text: string;
+};
+
+export type RsvpPayload = {
+  name: string;
+  attending: "yes" | "family" | "no";
+  guests: number;
+  contact: string;
+  message: string;
 };
 
 type PhotoRow = {
@@ -36,11 +42,10 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
 function headers(extra?: HeadersInit) {
-  return {
-    apikey: supabaseAnonKey,
-    Authorization: `Bearer ${supabaseAnonKey}`,
-    ...extra,
-  };
+  const requestHeaders = new Headers(extra);
+  requestHeaders.set("apikey", supabaseAnonKey);
+  requestHeaders.set("Authorization", `Bearer ${supabaseAnonKey}`);
+  return requestHeaders;
 }
 
 async function supabaseFetch<T>(path: string, init?: RequestInit) {
@@ -62,12 +67,12 @@ async function supabaseFetch<T>(path: string, init?: RequestInit) {
   return (await response.json()) as T;
 }
 
-export async function createRsvp(form: Rsvp) {
-  return supabaseFetch<RsvpRow[]>("/rest/v1/rsvps", {
+export async function createRsvp(form: RsvpPayload) {
+  await supabaseFetch<null>("/rest/v1/rsvps", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Prefer: "return=representation",
+      Prefer: "return=minimal",
     },
     body: JSON.stringify({
       name: form.name.trim(),
@@ -81,18 +86,20 @@ export async function createRsvp(form: Rsvp) {
 
 export async function listWallNotes() {
   const rows = await supabaseFetch<RsvpRow[]>(
-    "/rest/v1/rsvps?select=id,name,message&message=not.is.null&message=neq.&order=created_at.desc&limit=12",
+    "/rest/v1/rsvps?select=id,name,message&message=not.is.null&order=created_at.desc&limit=24",
   );
 
-  return rows.map((row) => {
-    const author = row.name?.trim() || "一位同门";
-    return {
-      id: `rsvp-${row.id}`,
-      author,
-      avatar: author.slice(0, 1).toUpperCase(),
-      text: row.message?.trim() || "",
-    };
-  });
+  return rows
+    .map((row) => {
+      const author = row.name?.trim() || "一位同门";
+      return {
+        id: `rsvp-${row.id}`,
+        author,
+        avatar: author.slice(0, 1).toUpperCase(),
+        text: row.message?.trim() || "",
+      };
+    })
+    .filter((note) => note.text);
 }
 
 export async function listPhotos() {
@@ -136,20 +143,34 @@ export async function uploadPhoto(file: File, caption: string, uploaderName: str
 
   const imageUrl = `${supabaseUrl}/storage/v1/object/public/photos/${encodedPath}`;
 
-  const rows = await supabaseFetch<PhotoRow[]>("/rest/v1/photos", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify({
-      image_url: imageUrl,
-      caption,
-      uploader_name: uploaderName,
-    }),
-  });
+  let rows: PhotoRow[] = [];
+  try {
+    rows = await supabaseFetch<PhotoRow[]>("/rest/v1/photos", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        image_url: imageUrl,
+        caption,
+        uploader_name: uploaderName,
+      }),
+    });
+  } catch (error) {
+    console.warn("Photo metadata save failed", error);
+  }
 
   const saved = rows[0];
+  if (!saved) {
+    return {
+      id: `remote-photo-${filePath}`,
+      src: imageUrl,
+      name: uploaderName,
+      caption: caption.trim() || "新上传的珍贵史料",
+    };
+  }
+
   return {
     id: `remote-photo-${saved.id}`,
     src: saved.image_url,

@@ -18,14 +18,9 @@ import {
   listWallNotes,
   uploadPhoto,
 } from "@/lib/supabase-client";
+import type { RsvpPayload } from "@/lib/supabase-client";
 
-export type Rsvp = {
-  name: string;
-  attending: "yes" | "family" | "no";
-  guests: number;
-  contact: string;
-  message: string;
-};
+type Rsvp = RsvpPayload;
 
 type Photo = {
   id: string;
@@ -41,7 +36,6 @@ type WallNote = {
   author: string;
   avatar: string;
   text: string;
-  status?: string;
 };
 
 const eventDate = new Date("2026-09-26T14:00:00+08:00");
@@ -120,12 +114,12 @@ export default function Home() {
     }
 
     if (isSupabaseConfigured) {
-      Promise.all([listPhotos(), listWallNotes()])
-        .then(([remotePhotos, remoteNotes]) => {
-          if (remotePhotos.length) {
+      Promise.allSettled([listPhotos(), listWallNotes()])
+        .then(([photosResult, notesResult]) => {
+          if (photosResult.status === "fulfilled" && photosResult.value.length) {
             const rotations = ["rotate-[-2deg]", "rotate-[1.5deg]", "rotate-[-1deg]", "rotate-[2deg]"];
             setPhotos([
-              ...remotePhotos.map((photo, index) => ({
+              ...photosResult.value.map((photo, index) => ({
                 ...photo,
                 rotation: rotations[index % rotations.length],
               })),
@@ -133,8 +127,8 @@ export default function Home() {
             ].slice(0, 24));
           }
 
-          if (remoteNotes.length) {
-            setWallNotes([...remoteNotes, ...initialWallNotes]);
+          if (notesResult.status === "fulfilled" && notesResult.value.length) {
+            setWallNotes(notesResult.value);
           }
         })
         .catch((error) => {
@@ -331,7 +325,7 @@ export default function Home() {
             </a>
           </header>
 
-          <div className="-mt-20 max-w-5xl rounded-t-[28px] bg-[#eef0ec]/90 pb-2 pt-8 backdrop-blur-sm sm:mt-0 sm:bg-transparent sm:pb-8 sm:pt-[38vh] sm:backdrop-blur-none lg:pt-[34vh]">
+          <div className="-mt-20 max-w-5xl pb-2 pt-8 sm:mt-0 sm:pb-8 sm:pt-[38vh] lg:pt-[34vh]">
             <p className="absolute -mt-5 inline-flex items-center gap-1 text-xs font-semibold tracking-[0.04em] text-[#62715f] sm:static sm:mb-5 sm:gap-2 sm:rounded-full sm:border sm:border-[#73836f]/35 sm:bg-white/76 sm:px-4 sm:py-2 sm:text-base sm:font-medium sm:text-[#4e604a] sm:shadow-sm sm:backdrop-blur">
               <PartyPopper className="h-4 w-4" aria-hidden="true" />
               60正青春，Lab再集合
@@ -350,9 +344,13 @@ export default function Home() {
                 target="_blank"
                 rel="noreferrer"
                 className="order-4 flex min-h-14 items-center gap-4 rounded-md border border-white/70 bg-white/72 px-4 py-3 shadow-sm backdrop-blur transition hover:border-[#b08a55]/60 hover:bg-white/85 sm:order-2"
+                aria-label="导航到上海闵行白金汉爵大酒店，沪闵路1577号"
               >
                 <MapPin className="h-5 w-5 shrink-0 text-[#7f6344]" aria-hidden="true" />
-                <span>上海闵行白金汉爵大酒店（沪闵路1577号）</span>
+                <span className="leading-6">
+                  <span className="block">上海闵行白金汉爵大酒店</span>
+                  <span className="block text-sm text-[#5f6b5b]">沪闵路1577号 点击导航</span>
+                </span>
               </a>
               <div className="order-2 grid gap-2 sm:order-3 sm:col-start-1">
                 {schedule.map((item) => (
@@ -525,11 +523,13 @@ export default function Home() {
                 }`}
               >
                 <span className="absolute -top-3 left-1/2 h-7 w-24 -translate-x-1/2 rotate-[-3deg] bg-[#f3dfad]/75 shadow-sm" />
-                <img
-                  src={photo.src}
-                  alt={photo.name}
-                  className={`aspect-[4/3] w-full rounded-[2px] object-cover ${photo.imageClass ?? ""}`}
-                />
+                <div className="aspect-[4/3] overflow-hidden rounded-[2px] bg-[#eef0ec]">
+                  <img
+                    src={photo.src}
+                    alt={photo.name}
+                    className={`h-full w-full object-cover ${photo.imageClass ?? ""}`}
+                  />
+                </div>
                 <figcaption className="mt-3 font-serif text-sm font-bold leading-5 text-[#253024] sm:text-lg sm:leading-6">
                   {photo.caption}
                 </figcaption>
@@ -568,7 +568,6 @@ export default function Home() {
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-[#7f6344]">
                     {note.author}：
-                    {note.status && <span className="ml-2 text-xs text-[#6b7f5f]">{note.status}</span>}
                   </span>
                   <span className="block text-sm">“{note.text}”</span>
                 </span>

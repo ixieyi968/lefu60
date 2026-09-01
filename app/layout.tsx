@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -22,6 +22,10 @@ export const metadata: Metadata = {
       '六十岁不退休，长聘续费成功。你导喊你回家吃饭啦。',
     images: ['/invitation-cover.webp'],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#eef0ec',
 };
 
 export default function RootLayout({

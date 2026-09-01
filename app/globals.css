@@ -53,7 +53,12 @@ body {
 }
 
 html {
-  color-scheme: light;
+  background: #eef0ec;
+  color-scheme: light only;
+}
+
+body {
+  background: #eef0ec;
 }
 
 :root {
