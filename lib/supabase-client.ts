@@ -19,11 +19,14 @@ type RsvpRow = {
   message: string | null;
 };
 
-const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const defaultSupabaseUrl = "https://rsumjaaancigotgulpkc.supabase.co/rest/v1/";
+const defaultSupabaseAnonKey = "sb_publishable_jyIV4HuQpyEVRzGwZKgoDg_Vg_FS6kH";
+
+const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || defaultSupabaseUrl;
 const supabaseUrl = rawSupabaseUrl
   .replace(/\/rest\/v1\/?$/, "")
   .replace(/\/$/, "");
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseAnonKey;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
