@@ -86,7 +86,6 @@ export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
   const [wallNotes, setWallNotes] = useState<WallNote[]>(initialWallNotes);
   const [isSavingRsvp, setIsSavingRsvp] = useState(false);
-  const [hasSubmittedRsvp, setHasSubmittedRsvp] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [timeLeft, setTimeLeft] = useState({
@@ -112,7 +111,6 @@ export default function Home() {
     if (saved) {
       const parsed = JSON.parse(saved) as Rsvp;
       setForm(parsed);
-      setHasSubmittedRsvp(true);
     }
 
     if (isSupabaseConfigured) {
@@ -152,8 +150,7 @@ export default function Home() {
 
       await createRsvp(form);
       window.localStorage.setItem("lefu60-rsvp", JSON.stringify(form));
-      setHasSubmittedRsvp(true);
-      setRsvpMessage("嗯，记得准时回来。");
+      setRsvpMessage("收到，信息已更新。");
     } catch (error) {
       console.warn("RSVP save failed", error);
       setRsvpMessage("本机已记录，后台暂时没连上，稍后再试一次。");
@@ -460,11 +457,11 @@ export default function Home() {
             />
 
             <button
-              disabled={isSavingRsvp || hasSubmittedRsvp}
+              disabled={isSavingRsvp}
               className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#5f7657] px-4 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send className="h-4 w-4" aria-hidden="true" />
-              {isSavingRsvp ? "正在提交..." : hasSubmittedRsvp ? "已提交 RSVP" : "提交 RSVP"}
+              {isSavingRsvp ? "正在提交..." : "提交 / 更新 RSVP"}
             </button>
             {rsvpMessage && (
               <p className="mt-4 rounded-md bg-[#f8f0dc] px-4 py-3 text-sm font-semibold text-[#506744]">
