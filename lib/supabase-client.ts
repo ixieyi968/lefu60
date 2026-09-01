@@ -50,7 +50,10 @@ async function supabaseFetch<T>(path: string, init?: RequestInit) {
   }
 
   if (response.status === 204) return null as T;
-  return (await response.json()) as T;
+
+  const text = await response.text();
+  if (!text) return null as T;
+  return JSON.parse(text) as T;
 }
 
 export async function createRsvp(form: RsvpPayload) {
