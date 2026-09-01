@@ -13,14 +13,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: '乐福老师 60 岁生日会',
-  description:
-    '六十岁不退休，长聘续费成功。查看张老师生日会活动信息并提交 RSVP。',
+  metadataBase: new URL('https://lefu60-beer.xieyi968.chatgpt.site'),
+  title: '人生一甲子 乐福正当时',
+  description: '你导喊你回家吃饭啦',
   openGraph: {
-    title: '乐福老师 60 岁生日会',
-    description:
-      '六十岁不退休，长聘续费成功。你导喊你回家吃饭啦。',
-    images: ['/invitation-cover.webp'],
+    title: '人生一甲子 乐福正当时',
+    description: '你导喊你回家吃饭啦',
+    images: [
+      {
+        url: '/og-square.png',
+        width: 1200,
+        height: 1200,
+        alt: '人生一甲子 乐福正当时',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    title: '人生一甲子 乐福正当时',
+    description: '你导喊你回家吃饭啦',
+    images: ['/og-square.png'],
   },
 };
 
