@@ -13,26 +13,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://lefu60-beer.xieyi968.chatgpt.site'),
-  title: '人生一甲子 乐福正当时',
-  description: '你导喊你回家吃饭啦',
+  metadataBase: new URL('https://lefu60.beer'),
+  title: '人生一甲子🎉乐福正当时',
+  description: '你导喊你回家吃饭啦!⛷️',
   openGraph: {
-    title: '人生一甲子 乐福正当时',
-    description: '你导喊你回家吃饭啦',
+    title: '人生一甲子🎉乐福正当时',
+    description: '你导喊你回家吃饭啦!⛷️',
     images: [
       {
-        url: '/og-square.png',
+        url: '/share-card.jpg',
         width: 1200,
         height: 1200,
-        alt: '人生一甲子 乐福正当时',
+        alt: '人生一甲子🎉乐福正当时',
       },
     ],
   },
   twitter: {
     card: 'summary',
-    title: '人生一甲子 乐福正当时',
-    description: '你导喊你回家吃饭啦',
-    images: ['/og-square.png'],
+    title: '人生一甲子🎉乐福正当时',
+    description: '你导喊你回家吃饭啦!⛷️',
+    images: ['/share-card.jpg'],
   },
 };
 
