@@ -11,8 +11,15 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import {
+  createRsvp,
+  isSupabaseConfigured,
+  listPhotos,
+  listWallNotes,
+  uploadPhoto,
+} from "@/lib/supabase-client";
 
-type Rsvp = {
+export type Rsvp = {
   name: string;
   attending: "yes" | "family" | "no";
   guests: number;
@@ -108,6 +115,9 @@ export default function Home() {
   const [isMuted, setIsMuted] = useState(false);
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
   const [wallNotes, setWallNotes] = useState<WallNote[]>(initialWallNotes);
+  const [isSavingRsvp, setIsSavingRsvp] = useState(false);
+  const [photoMessage, setPhotoMessage] = useState("");
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -132,13 +142,49 @@ export default function Home() {
       setForm(parsed);
     }
 
+    if (isSupabaseConfigured) {
+      Promise.all([listPhotos(), listWallNotes()])
+        .then(([remotePhotos, remoteNotes]) => {
+          if (remotePhotos.length) {
+            const rotations = ["rotate-[-2deg]", "rotate-[1.5deg]", "rotate-[-1deg]", "rotate-[2deg]"];
+            setPhotos([
+              ...remotePhotos.map((photo, index) => ({
+                ...photo,
+                rotation: rotations[index % rotations.length],
+              })),
+              ...initialPhotos,
+            ].slice(0, 24));
+          }
+
+          if (remoteNotes.length) {
+            setWallNotes([...remoteNotes, ...initialWallNotes]);
+          }
+        })
+        .catch((error) => {
+          console.warn("Supabase content load failed", error);
+        });
+    }
+
     return () => window.clearInterval(timer);
   }, []);
 
-  function submitRsvp(event: React.FormEvent<HTMLFormElement>) {
+  async function submitRsvp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     window.localStorage.setItem("lefu60-rsvp", JSON.stringify(form));
-    setRsvpMessage("嗯，记得准时回来。");
+    setIsSavingRsvp(true);
+
+    try {
+      if (isSupabaseConfigured) {
+        await createRsvp(form);
+      }
+
+      setRsvpMessage("嗯，记得准时回来。");
+    } catch (error) {
+      console.warn("RSVP save failed", error);
+      setRsvpMessage("本机已记录，后台暂时没连上，稍后再试一次。");
+    } finally {
+      setIsSavingRsvp(false);
+    }
 
     const message = form.message.trim();
     if (message) {
@@ -148,14 +194,13 @@ export default function Home() {
           author: form.name.trim() || "一位同门",
           avatar: (form.name.trim() || "同").slice(0, 1).toUpperCase(),
           text: message,
-          status: "待审核",
         },
         ...current,
       ]);
     }
   }
 
-  function addPhotos(event: React.ChangeEvent<HTMLInputElement>) {
+  async function addPhotos(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).filter((file) =>
       file.type.startsWith("image/"),
     );
@@ -169,16 +214,34 @@ export default function Home() {
 
     const rotations = ["rotate-[-2deg]", "rotate-[1.5deg]", "rotate-[-1deg]", "rotate-[2deg]"];
     const caption = promptedCaption.trim() || "新上传的珍贵史料";
-    const nextPhotos = files.map((file, index) => ({
-      id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
-      src: URL.createObjectURL(file),
-      name: file.name,
-      caption,
-      rotation: rotations[(photos.length + index) % rotations.length],
-    }));
+    const uploaderName = form.name.trim() || "一位同门";
+    setIsUploadingPhotos(true);
+    setPhotoMessage("");
 
-    setPhotos((current) => [...nextPhotos, ...current].slice(0, 12));
-    event.target.value = "";
+    try {
+      const uploadedPhotos = isSupabaseConfigured
+        ? await Promise.all(files.map((file) => uploadPhoto(file, caption, uploaderName)))
+        : files.map((file) => ({
+            id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
+            src: URL.createObjectURL(file),
+            name: file.name,
+            caption,
+          }));
+
+      const nextPhotos = uploadedPhotos.map((photo, index) => ({
+        ...photo,
+        rotation: rotations[(photos.length + index) % rotations.length],
+      }));
+
+      setPhotos((current) => [...nextPhotos, ...current].slice(0, 24));
+      setPhotoMessage(isSupabaseConfigured ? "照片已上传，大家刷新后都能看见。" : "照片已在本机显示。");
+    } catch (error) {
+      console.warn("Photo upload failed", error);
+      setPhotoMessage("照片上传失败，请稍后再试一次。");
+    } finally {
+      setIsUploadingPhotos(false);
+      event.target.value = "";
+    }
   }
 
   function choosePhotos() {
@@ -225,8 +288,8 @@ export default function Home() {
         <audio ref={audioRef} src="/audio/pingfan-road.m4a" loop preload="auto" />
 
         <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-5 text-center">
-          <h1 className="max-w-5xl text-4xl font-bold leading-tight text-[#162033] sm:text-5xl lg:text-6xl">
-            六十正当年，长聘也到手🎉
+          <h1 className="max-w-5xl text-[31px] font-bold leading-tight text-[#162033] sm:text-5xl lg:text-6xl">
+            <span className="block whitespace-nowrap">六十正当年，长聘也到手🎉</span>
             <span className="mt-3 block">你导喊你回家吃饭啦!⛷️</span>
           </h1>
           <p className="mt-8 text-lg font-medium text-[#263145] sm:text-xl">
@@ -248,14 +311,24 @@ export default function Home() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#eef0ec] text-[#20251f]">
       <audio ref={audioRef} src="/audio/pingfan-road.m4a" loop preload="auto" />
-      <section className="relative min-h-[92vh] overflow-hidden">
-        <img
-          src="/invitation-cover.webp"
-          alt="张老师生日会邀请封面"
-          className="absolute inset-0 h-full w-full object-cover object-[52%_top] sm:object-center"
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_31%,rgba(238,240,236,0.02)_0%,rgba(238,240,236,0.08)_13%,rgba(238,240,236,0.42)_34%,rgba(238,240,236,0.82)_78%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_28%_70%,rgba(238,240,236,0.9)_0%,rgba(238,240,236,0.7)_26%,rgba(238,240,236,0)_56%)] sm:bg-[radial-gradient(ellipse_at_28%_66%,rgba(238,240,236,0.86)_0%,rgba(238,240,236,0.68)_28%,rgba(238,240,236,0)_58%)]" />
+      <section className="relative overflow-hidden sm:min-h-[92vh]">
+        <div className="relative sm:absolute sm:inset-0 sm:h-full">
+          <img
+            src="/hero-clean.png"
+            alt="张老师生日会邀请封面"
+            className="h-auto w-full sm:absolute sm:inset-0 sm:h-full sm:object-cover sm:object-center"
+          />
+          <div className="absolute inset-x-5 top-5 z-20 flex items-center justify-between sm:hidden">
+            <a href="#rsvp" className="text-sm font-semibold tracking-[0.14em] text-[#62715f]">
+              LEFU60.BEER
+            </a>
+            <a href="#rsvp" className="text-sm font-semibold tracking-[0.14em] text-[#62715f]">
+              60正青春
+            </a>
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-[#eef0ec] sm:inset-0 sm:h-auto sm:bg-[radial-gradient(ellipse_at_50%_30%,rgba(238,240,236,0)_0%,rgba(238,240,236,0.04)_16%,rgba(238,240,236,0.38)_40%,rgba(238,240,236,0.86)_82%)]" />
+          <div className="absolute inset-0 hidden bg-[linear-gradient(180deg,rgba(238,240,236,0)_0%,rgba(238,240,236,0.16)_34%,rgba(238,240,236,0.78)_66%,rgba(238,240,236,0.94)_100%)] sm:block" />
+        </div>
         <button
           type="button"
           onMouseEnter={() => setShowGlassesTip(true)}
@@ -270,8 +343,8 @@ export default function Home() {
             导师视线已锁定：9 月 26 日见？
           </div>
         )}
-        <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-6xl flex-col justify-between px-5 py-5 sm:min-h-[92vh] sm:px-8 sm:py-6 lg:px-10">
-          <header className="flex items-center justify-between gap-4">
+        <div className="relative z-10 mx-auto flex max-w-6xl flex-col px-5 pb-4 sm:min-h-[92vh] sm:justify-between sm:px-8 sm:py-6 lg:px-10">
+          <header className="hidden items-center justify-between gap-4 sm:flex">
             <a href="#rsvp" className="text-sm font-semibold tracking-[0.14em] text-[#62715f]">
               LEFU60.BEER
             </a>
@@ -284,30 +357,30 @@ export default function Home() {
             </a>
           </header>
 
-          <div className="max-w-5xl pb-8 pt-[46vh] sm:pb-10 sm:pt-[36vh] lg:pt-[34vh]">
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#73836f]/35 bg-white/66 px-4 py-2 text-sm font-medium text-[#4e604a] backdrop-blur sm:mb-5 sm:text-base">
+          <div className="-mt-20 max-w-5xl rounded-t-[28px] bg-[#eef0ec]/90 pb-4 pt-8 backdrop-blur-sm sm:mt-0 sm:bg-transparent sm:pb-10 sm:pt-[38vh] sm:backdrop-blur-none lg:pt-[34vh]">
+            <p className="mb-4 hidden items-center gap-2 rounded-full border border-[#73836f]/35 bg-white/76 px-4 py-2 text-sm font-medium text-[#4e604a] shadow-sm backdrop-blur sm:mb-5 sm:inline-flex sm:text-base">
               <PartyPopper className="h-4 w-4" aria-hidden="true" />
               60正青春，Lab再集合
             </p>
-            <h1 className="font-serif text-4xl font-bold leading-tight text-[#20251f] sm:text-5xl lg:text-6xl">
-              <span className="block sm:whitespace-nowrap">六十正当年，长聘也到手。</span>
+            <h1 className="font-serif text-[29px] font-bold leading-tight text-[#20251f] min-[390px]:text-[31px] sm:text-5xl lg:text-6xl">
+              <span className="block whitespace-nowrap">六十正当年，长聘也到手。</span>
               <span className="mt-3 block text-[#6b7f5f]">你导喊你回家吃饭啦!</span>
             </h1>
             <div className="mt-8 grid max-w-[660px] gap-3 text-base sm:grid-cols-[270px_375px]">
-              <div className="flex min-h-14 items-center gap-4 rounded-md border border-white/70 bg-white/72 px-4 py-3 shadow-sm backdrop-blur">
+              <div className="order-1 flex min-h-14 items-center gap-4 rounded-md border border-white/70 bg-white/72 px-4 py-3 shadow-sm backdrop-blur">
                 <CalendarDays className="h-5 w-5 shrink-0 text-[#7f6344]" aria-hidden="true" />
                 <span className="font-medium">2026 年 9 月 26 日，周六</span>
               </div>
               <a
-                href="https://uri.amap.com/navigation?to=121.41013,31.04397,%E4%B8%8A%E6%B5%B7%E9%97%B5%E8%A1%8C%E7%99%BD%E9%87%91%E6%B1%89%E7%88%B5%E5%A4%A7%E9%85%92%E5%BA%97&mode=car&policy=1&src=lefu60.beer&coordinate=gaode&callnative=1"
+                href="https://surl.amap.com/jkmXhJ8d75Q"
                 target="_blank"
                 rel="noreferrer"
-                className="flex min-h-14 items-center gap-4 rounded-md border border-white/70 bg-white/72 px-4 py-3 shadow-sm backdrop-blur transition hover:border-[#b08a55]/60 hover:bg-white/85"
+                className="order-4 flex min-h-14 items-center gap-4 rounded-md border border-white/70 bg-white/72 px-4 py-3 shadow-sm backdrop-blur transition hover:border-[#b08a55]/60 hover:bg-white/85 sm:order-2"
               >
                 <MapPin className="h-5 w-5 shrink-0 text-[#7f6344]" aria-hidden="true" />
                 <span>上海闵行白金汉爵大酒店（沪闵路1577号）</span>
               </a>
-              <div className="grid gap-2 sm:col-start-1">
+              <div className="order-2 grid gap-2 sm:order-3 sm:col-start-1">
                 {schedule.map((item) => (
                   <article
                     key={item.time}
@@ -318,7 +391,7 @@ export default function Home() {
                   </article>
                 ))}
               </div>
-              <div className="flex min-h-10 items-center rounded-md border border-white/70 bg-[#f8f0dc]/82 px-4 py-2 text-xl font-semibold text-[#506744] shadow-sm backdrop-blur sm:col-start-2 sm:row-start-2">
+              <div className="order-5 flex min-h-10 items-center rounded-md border border-white/70 bg-[#f8f0dc]/82 px-4 py-2 text-xl font-semibold text-[#506744] shadow-sm backdrop-blur sm:col-start-2 sm:row-start-2">
                 距离回家吃饭还有 {timeLeft.days} 天{" "}
                 {String(timeLeft.hours).padStart(2, "0")}:
                 {String(timeLeft.minutes).padStart(2, "0")}:
@@ -329,7 +402,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="plan" className="mx-auto grid max-w-6xl gap-10 px-5 py-14 sm:px-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-end lg:px-10">
+      <section id="plan" className="mx-auto grid max-w-6xl gap-10 px-5 pb-14 pt-8 sm:px-8 sm:py-14 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-end lg:px-10">
         <div className="flex min-h-full flex-col">
           <div>
             <p className="mb-3 text-sm font-semibold text-[#7f6344]">Happy Birthday</p>
@@ -413,9 +486,12 @@ export default function Home() {
               placeholder="写几句想对老师说的话"
             />
 
-            <button className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#5f7657] px-4 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25">
+            <button
+              disabled={isSavingRsvp}
+              className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#5f7657] px-4 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
+            >
               <Send className="h-4 w-4" aria-hidden="true" />
-              提交 RSVP
+              {isSavingRsvp ? "正在提交..." : "提交 RSVP"}
             </button>
             {rsvpMessage && (
               <p className="mt-4 rounded-md bg-[#f8f0dc] px-4 py-3 text-sm font-semibold text-[#506744]">
@@ -455,10 +531,16 @@ export default function Home() {
             <button
               type="button"
               onClick={choosePhotos}
-              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
+              disabled={isUploadingPhotos}
+              className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              上传珍贵史料
+              {isUploadingPhotos ? "正在上传..." : "上传珍贵史料"}
             </button>
+            {photoMessage && (
+              <p className="mt-4 rounded-md bg-[#eef3e9] px-4 py-3 text-sm font-semibold text-[#506744]">
+                {photoMessage}
+              </p>
+            )}
           </div>
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:items-start">
             {photos.map((photo, index) => (
