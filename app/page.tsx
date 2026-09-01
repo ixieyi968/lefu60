@@ -86,6 +86,7 @@ export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
   const [wallNotes, setWallNotes] = useState<WallNote[]>(initialWallNotes);
   const [isSavingRsvp, setIsSavingRsvp] = useState(false);
+  const [hasSubmittedRsvp, setHasSubmittedRsvp] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [timeLeft, setTimeLeft] = useState({
@@ -111,6 +112,7 @@ export default function Home() {
     if (saved) {
       const parsed = JSON.parse(saved) as Rsvp;
       setForm(parsed);
+      setHasSubmittedRsvp(true);
     }
 
     if (isSupabaseConfigured) {
@@ -141,14 +143,16 @@ export default function Home() {
 
   async function submitRsvp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    window.localStorage.setItem("lefu60-rsvp", JSON.stringify(form));
     setIsSavingRsvp(true);
 
     try {
-      if (isSupabaseConfigured) {
-        await createRsvp(form);
+      if (!isSupabaseConfigured) {
+        throw new Error("Supabase is not configured.");
       }
 
+      await createRsvp(form);
+      window.localStorage.setItem("lefu60-rsvp", JSON.stringify(form));
+      setHasSubmittedRsvp(true);
       setRsvpMessage("嗯，记得准时回来。");
     } catch (error) {
       console.warn("RSVP save failed", error);
@@ -190,14 +194,11 @@ export default function Home() {
     setPhotoMessage("");
 
     try {
-      const uploadedPhotos = isSupabaseConfigured
-        ? await Promise.all(files.map((file) => uploadPhoto(file, caption, uploaderName)))
-        : files.map((file) => ({
-            id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
-            src: URL.createObjectURL(file),
-            name: file.name,
-            caption,
-          }));
+      if (!isSupabaseConfigured) {
+        throw new Error("Supabase is not configured.");
+      }
+
+      const uploadedPhotos = await Promise.all(files.map((file) => uploadPhoto(file, caption, uploaderName)));
 
       const nextPhotos = uploadedPhotos.map((photo, index) => ({
         ...photo,
@@ -205,7 +206,7 @@ export default function Home() {
       }));
 
       setPhotos((current) => [...nextPhotos, ...current].slice(0, 24));
-      setPhotoMessage(isSupabaseConfigured ? "照片已上传，大家刷新后都能看见。" : "照片已在本机显示。");
+      setPhotoMessage("照片已上传，大家刷新后都能看见。");
     } catch (error) {
       console.warn("Photo upload failed", error);
       setPhotoMessage("照片上传失败，请稍后再试一次。");
@@ -331,7 +332,7 @@ export default function Home() {
               60正青春，Lab再集合
             </p>
             <h1 className="font-serif text-[29px] font-bold leading-tight text-[#20251f] min-[390px]:text-[31px] sm:text-5xl lg:text-6xl">
-              <span className="block whitespace-nowrap">六十正当年🎉长聘也到手。</span>
+              <span className="block whitespace-nowrap">六十正当年🎉长聘也到手</span>
               <span className="mt-3 block text-[#6b7f5f]">你导喊你回家吃饭啦!</span>
             </h1>
             <div className="mt-8 grid max-w-[660px] gap-3 text-base sm:grid-cols-[270px_375px]">
@@ -459,11 +460,11 @@ export default function Home() {
             />
 
             <button
-              disabled={isSavingRsvp}
+              disabled={isSavingRsvp || hasSubmittedRsvp}
               className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#5f7657] px-4 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Send className="h-4 w-4" aria-hidden="true" />
-              {isSavingRsvp ? "正在提交..." : "提交 RSVP"}
+              {isSavingRsvp ? "正在提交..." : hasSubmittedRsvp ? "已提交 RSVP" : "提交 RSVP"}
             </button>
             {rsvpMessage && (
               <p className="mt-4 rounded-md bg-[#f8f0dc] px-4 py-3 text-sm font-semibold text-[#506744]">

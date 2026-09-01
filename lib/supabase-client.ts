@@ -1,17 +1,3 @@
-export type RemotePhoto = {
-  id: string;
-  src: string;
-  name: string;
-  caption: string;
-};
-
-export type RemoteWallNote = {
-  id: string;
-  author: string;
-  avatar: string;
-  text: string;
-};
-
 export type RsvpPayload = {
   name: string;
   attending: "yes" | "family" | "no";
@@ -143,38 +129,23 @@ export async function uploadPhoto(file: File, caption: string, uploaderName: str
 
   const imageUrl = `${supabaseUrl}/storage/v1/object/public/photos/${encodedPath}`;
 
-  let rows: PhotoRow[] = [];
-  try {
-    rows = await supabaseFetch<PhotoRow[]>("/rest/v1/photos", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        image_url: imageUrl,
-        caption,
-        uploader_name: uploaderName,
-      }),
-    });
-  } catch (error) {
-    console.warn("Photo metadata save failed", error);
-  }
-
-  const saved = rows[0];
-  if (!saved) {
-    return {
-      id: `remote-photo-${filePath}`,
-      src: imageUrl,
-      name: uploaderName,
-      caption: caption.trim() || "新上传的珍贵史料",
-    };
-  }
+  await supabaseFetch<null>("/rest/v1/photos", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      image_url: imageUrl,
+      caption: caption.trim(),
+      uploader_name: uploaderName.trim(),
+    }),
+  });
 
   return {
-    id: `remote-photo-${saved.id}`,
-    src: saved.image_url,
-    name: saved.uploader_name?.trim() || "同门上传",
-    caption: saved.caption?.trim() || "新上传的珍贵史料",
+    id: `remote-photo-${filePath}`,
+    src: imageUrl,
+    name: uploaderName.trim() || "同门上传",
+    caption: caption.trim() || "新上传的珍贵史料",
   };
 }
