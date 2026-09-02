@@ -13,7 +13,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  createRsvp,
   isSupabaseConfigured,
   listPhotos,
   listWallNotes,
@@ -86,16 +85,32 @@ function getTimeLeft() {
 type HomeClientProps = {
   initialLoadedPhotos: LoadedPhoto[];
   initialLoadedWallNotes: WallNote[];
+  initialTimeLeft: {
+    days: number;
+    hours: number;
+    minutes: number;
+    seconds: number;
+  };
+  rsvpStatus: string;
+  photoStatus: string;
 };
 
 export default function HomeClient({
   initialLoadedPhotos,
   initialLoadedWallNotes,
+  initialTimeLeft,
+  rsvpStatus,
+  photoStatus,
 }: HomeClientProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [showGlassesTip, setShowGlassesTip] = useState(false);
-  const [rsvpMessage, setRsvpMessage] = useState("");
+  const rsvpMessage =
+    rsvpStatus === "success"
+      ? "收到，信息已更新。"
+      : rsvpStatus === "error"
+        ? "后台暂时没连上，稍后再试一次。"
+        : "";
   const [isOpened, setIsOpened] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [photos, setPhotos] = useState<Photo[]>(
@@ -113,17 +128,17 @@ export default function HomeClient({
     initialLoadedWallNotes.length ? initialLoadedWallNotes : initialWallNotes,
   );
   const [isSavingRsvp, setIsSavingRsvp] = useState(false);
-  const [photoMessage, setPhotoMessage] = useState("");
+  const [photoMessage, setPhotoMessage] = useState(
+    photoStatus === "success"
+      ? "照片已上传，大家刷新后都能看见。"
+      : photoStatus === "error"
+        ? "照片上传失败，请稍后再试一次。"
+        : "",
+  );
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  const [isWallOpen, setIsWallOpen] = useState(false);
   const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
   const [captionDraft, setCaptionDraft] = useState("");
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0,
-  });
+  const [timeLeft, setTimeLeft] = useState(initialTimeLeft);
   const [form, setForm] = useState<Rsvp>({
     name: "",
     attending: "yes",
@@ -136,17 +151,21 @@ export default function HomeClient({
   useEffect(() => {
     setTimeLeft(getTimeLeft());
     const timer = window.setInterval(() => setTimeLeft(getTimeLeft()), 1000);
-    const saved = window.localStorage.getItem("lefu60-rsvp");
+    try {
+      const saved = window.localStorage.getItem("lefu60-rsvp");
 
-    if (saved) {
-      const parsed = JSON.parse(saved) as Rsvp;
-      setForm({
-        name: parsed.name ?? "",
-        attending: parsed.attending ?? "yes",
-        guests: parsed.guests || 1,
-        contact: parsed.contact ?? "",
-        message: parsed.message ?? "",
-      });
+      if (saved) {
+        const parsed = JSON.parse(saved) as Rsvp;
+        setForm({
+          name: parsed.name ?? "",
+          attending: parsed.attending ?? "yes",
+          guests: parsed.guests || 1,
+          contact: parsed.contact ?? "",
+          message: parsed.message ?? "",
+        });
+      }
+    } catch (error) {
+      console.warn("Local RSVP restore failed", error);
     }
 
     if (isSupabaseConfigured) {
@@ -174,36 +193,13 @@ export default function HomeClient({
     return () => window.clearInterval(timer);
   }, []);
 
-  async function submitRsvp(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function rememberRsvp() {
     setIsSavingRsvp(true);
 
     try {
-      if (!isSupabaseConfigured) {
-        throw new Error("Supabase is not configured.");
-      }
-
-      await createRsvp(form);
       window.localStorage.setItem("lefu60-rsvp", JSON.stringify(form));
-      setRsvpMessage("收到，信息已更新。");
     } catch (error) {
-      console.warn("RSVP save failed", error);
-      setRsvpMessage("本机已记录，后台暂时没连上，稍后再试一次。");
-    } finally {
-      setIsSavingRsvp(false);
-    }
-
-    const message = form.message.trim();
-    if (message) {
-      setWallNotes((current) => [
-        {
-          id: `wish-${Date.now()}`,
-          author: form.name.trim() || "一位同门",
-          avatar: (form.name.trim() || "同").slice(0, 1).toUpperCase(),
-          text: message,
-        },
-        ...current,
-      ]);
+      console.warn("Local RSVP save failed", error);
     }
   }
 
@@ -223,7 +219,7 @@ export default function HomeClient({
     if (photoInputRef.current) photoInputRef.current.value = "";
   }
 
-  async function uploadPendingPhotos(event: React.FormEvent<HTMLFormElement>) {
+  async function uploadPendingPhotos(event: { preventDefault: () => void }) {
     event.preventDefault();
     if (!pendingPhotoFiles.length) return;
 
@@ -255,10 +251,6 @@ export default function HomeClient({
     } finally {
       setIsUploadingPhotos(false);
     }
-  }
-
-  function choosePhotos() {
-    photoInputRef.current?.click();
   }
 
   function openInvitation() {
@@ -433,12 +425,18 @@ export default function HomeClient({
           </div>
         </div>
         <div id="rsvp" className="mt-8 max-w-3xl">
-          <form onSubmit={submitRsvp} className="rounded-md bg-white p-5 shadow-sm sm:p-6">
+          <form
+            action="/api/rsvp"
+            method="post"
+            onSubmit={rememberRsvp}
+            className="rsvp-form rounded-md bg-white p-5 shadow-sm sm:p-6"
+          >
             <label className="block text-sm font-semibold" htmlFor="name">
               姓名
             </label>
             <input
               id="name"
+              name="name"
               required
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
@@ -451,6 +449,7 @@ export default function HomeClient({
             </label>
             <input
               id="contact"
+              name="contact"
               required
               inputMode="tel"
               value={form.contact}
@@ -491,13 +490,13 @@ export default function HomeClient({
               </div>
             </fieldset>
 
-            {form.attending !== "no" && (
-              <>
+            <div className="guest-field">
                 <label className="mt-5 block text-sm font-semibold" htmlFor="guests">
                   出席人数
                 </label>
                 <select
                   id="guests"
+                  name="guests"
                   value={form.guests}
                   onChange={(event) => setForm({ ...form, guests: Number(event.target.value) })}
                   className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] bg-white px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
@@ -508,14 +507,14 @@ export default function HomeClient({
                     </option>
                   ))}
                 </select>
-              </>
-            )}
+            </div>
 
             <label className="mt-5 block text-sm font-semibold" htmlFor="message">
               老师，我想大声告诉你：
             </label>
             <textarea
               id="message"
+              name="message"
               value={form.message}
               onChange={(event) => setForm({ ...form, message: event.target.value })}
               className="mt-2 min-h-28 w-full rounded-md border border-[#cbd4c6] px-3 py-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
@@ -523,6 +522,7 @@ export default function HomeClient({
             />
 
             <button
+              type="submit"
               disabled={isSavingRsvp}
               className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#5f7657] px-4 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -530,7 +530,7 @@ export default function HomeClient({
               {isSavingRsvp ? "正在提交..." : "提交 / 更新 RSVP"}
             </button>
             {rsvpMessage && (
-              <p className="mt-4 rounded-md bg-[#f8f0dc] px-4 py-3 text-sm font-semibold text-[#506744]">
+              <p id="rsvp-status" className="mt-4 rounded-md bg-[#f8f0dc] px-4 py-3 text-sm font-semibold text-[#506744]">
                 {rsvpMessage}
               </p>
             )}
@@ -551,33 +551,57 @@ export default function HomeClient({
       <section className="bg-[#f8f7f2]">
         <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
           <p className="mb-3 text-sm font-semibold text-[#7f6344]">照片墙</p>
-          <div className="lg:w-[1000px]">
+          <form
+            action="/api/photos"
+            method="post"
+            encType="multipart/form-data"
+            className="lg:w-[1000px]"
+          >
             <h2 className="font-serif text-3xl font-bold sm:text-4xl">把照片也带回来。</h2>
             <p className="mt-4 text-base leading-7 text-[#4d564a] sm:text-lg sm:leading-8">
               翻翻旧手机、硬盘和云盘。毕业照、实验室日常、团建、出差，还有那些当年觉得好笑、现在越看越有意思的照片。当然，和家人的合照、近照也欢迎，方便大家看看这些年彼此都“更新”成什么版本了。😂
             </p>
             <input
               ref={photoInputRef}
+              id="photo-files"
+              name="photos"
               type="file"
               accept="image/*"
               multiple
               onChange={preparePhotos}
               className="sr-only"
             />
-            <button
-              type="button"
-              onClick={choosePhotos}
-              disabled={isUploadingPhotos}
+            <label
+              htmlFor="photo-files"
               className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isUploadingPhotos ? "正在上传..." : "上传珍贵史料"}
+            </label>
+            <label className="mt-4 block text-sm font-semibold" htmlFor="inline-photo-caption">
+              一句话描述
+            </label>
+            <input
+              id="inline-photo-caption"
+              name="caption"
+              value={captionDraft}
+              onChange={(event) => setCaptionDraft(event.target.value)}
+              className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] bg-white px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+              placeholder="例如：2025 浦江郊野公园烧烤趴"
+            />
+            <input type="hidden" name="uploaderName" value={form.name} />
+            <button
+              type="submit"
+              disabled={isUploadingPhotos}
+              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-[#cbd4c6] bg-white px-5 font-semibold text-[#40513b] transition hover:bg-[#eef3e9] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              确认上传
             </button>
             {photoMessage && (
-              <p className="mt-4 rounded-md bg-[#eef3e9] px-4 py-3 text-sm font-semibold text-[#506744]">
+              <p id="photos-status" className="mt-4 rounded-md bg-[#eef3e9] px-4 py-3 text-sm font-semibold text-[#506744]">
                 {photoMessage}
               </p>
             )}
-          </div>
+          </form>
           <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3 lg:items-start">
             {photos.map((photo, index) => (
               <figure
@@ -603,7 +627,7 @@ export default function HomeClient({
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
+      <section id="guest-wall" className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
         <style>{`
           @keyframes guest-roll {
             from { transform: translateY(0); }
@@ -615,21 +639,22 @@ export default function HomeClient({
           .guest-roll-track:hover {
             animation-play-state: paused;
           }
+          .guest-wall-modal {
+            display: none;
+          }
+          .guest-wall-modal:target {
+            display: flex;
+          }
+          .rsvp-form:has(input[value="no"]:checked) .guest-field {
+            display: none;
+          }
         `}</style>
         <p className="mb-3 text-sm font-semibold text-[#7f6344]">留言墙</p>
         <h2 className="font-serif text-3xl font-bold sm:text-4xl">先说两句，见面再聊。</h2>
-        <div
-          className="mt-5 h-48 cursor-pointer overflow-hidden border-y border-[#d8ddd3] bg-[#f8f7f2] py-3 transition hover:bg-white/65 sm:mt-7 sm:h-52"
-          role="button"
-          tabIndex={0}
+        <a
+          href="#wall-all"
+          className="mt-5 block h-48 cursor-pointer overflow-hidden border-y border-[#d8ddd3] bg-[#f8f7f2] py-3 transition hover:bg-white/65 sm:mt-7 sm:h-52"
           aria-label="查看所有留言"
-          onClick={() => setIsWallOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setIsWallOpen(true);
-            }
-          }}
         >
           {rollingWallNotes.length ? (
           <div className="guest-roll-track flex flex-col gap-2">
@@ -655,25 +680,23 @@ export default function HomeClient({
               留言提交后，会在这里滚动显示。
             </div>
           )}
-        </div>
+        </a>
       </section>
 
-      {isWallOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#20251f]/55 px-4 py-6 backdrop-blur-sm">
+      <div id="wall-all" className="guest-wall-modal fixed inset-0 z-[70] items-center justify-center bg-[#20251f]/55 px-4 py-6 backdrop-blur-sm">
           <section className="relative flex h-[66vh] w-full max-w-4xl flex-col rounded-md bg-[#f8f7f2] shadow-2xl shadow-black/25">
             <div className="flex items-center justify-between border-b border-[#d8ddd3] px-5 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#7f6344]">留言墙</p>
                 <h2 className="font-serif text-2xl font-bold text-[#20251f]">所有留言</h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsWallOpen(false)}
+              <a
+                href="#guest-wall"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d8ddd3] bg-white text-[#40513b] transition hover:bg-[#eef3e9] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
                 aria-label="关闭留言墙"
               >
                 <X className="h-5 w-5" aria-hidden="true" />
-              </button>
+              </a>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               {wallNotes.length ? (
@@ -703,7 +726,6 @@ export default function HomeClient({
             </div>
           </section>
         </div>
-      )}
 
       {pendingPhotoFiles.length > 0 && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#20251f]/55 px-4 py-6 backdrop-blur-sm">
