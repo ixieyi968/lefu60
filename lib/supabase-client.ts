@@ -69,7 +69,7 @@ export async function createRsvp(form: RsvpPayload) {
     body: JSON.stringify({
       name: form.name.trim(),
       attending: form.attending,
-      guests: form.guests,
+      guests: form.attending === "no" ? 1 : form.guests,
       contact: form.contact.trim(),
       message: form.message.trim(),
     }),

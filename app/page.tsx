@@ -10,6 +10,7 @@ import {
   Send,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import {
   createRsvp,
@@ -88,6 +89,9 @@ export default function Home() {
   const [isSavingRsvp, setIsSavingRsvp] = useState(false);
   const [photoMessage, setPhotoMessage] = useState("");
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isWallOpen, setIsWallOpen] = useState(false);
+  const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
+  const [captionDraft, setCaptionDraft] = useState("");
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -110,7 +114,13 @@ export default function Home() {
 
     if (saved) {
       const parsed = JSON.parse(saved) as Rsvp;
-      setForm(parsed);
+      setForm({
+        name: parsed.name ?? "",
+        attending: parsed.attending ?? "yes",
+        guests: parsed.guests || 1,
+        contact: parsed.contact ?? "",
+        message: parsed.message ?? "",
+      });
     }
 
     if (isSupabaseConfigured) {
@@ -172,20 +182,28 @@ export default function Home() {
     }
   }
 
-  async function addPhotos(event: React.ChangeEvent<HTMLInputElement>) {
+  function preparePhotos(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).filter((file) =>
       file.type.startsWith("image/"),
     );
     if (!files.length) return;
 
-    const promptedCaption = window.prompt("给这批照片加一句 caption，例如：2025 浦江郊野公园烧烤趴");
-    if (promptedCaption === null) {
-      event.target.value = "";
-      return;
-    }
+    setPendingPhotoFiles(files);
+    setCaptionDraft("");
+  }
+
+  function closePhotoCaption() {
+    setPendingPhotoFiles([]);
+    setCaptionDraft("");
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  }
+
+  async function uploadPendingPhotos(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!pendingPhotoFiles.length) return;
 
     const rotations = ["rotate-[-2deg]", "rotate-[1.5deg]", "rotate-[-1deg]", "rotate-[2deg]"];
-    const caption = promptedCaption.trim() || "新上传的珍贵史料";
+    const caption = captionDraft.trim() || "新上传的珍贵史料";
     const uploaderName = form.name.trim() || "一位同门";
     setIsUploadingPhotos(true);
     setPhotoMessage("");
@@ -195,7 +213,9 @@ export default function Home() {
         throw new Error("Supabase is not configured.");
       }
 
-      const uploadedPhotos = await Promise.all(files.map((file) => uploadPhoto(file, caption, uploaderName)));
+      const uploadedPhotos = await Promise.all(
+        pendingPhotoFiles.map((file) => uploadPhoto(file, caption, uploaderName)),
+      );
 
       const nextPhotos = uploadedPhotos.map((photo, index) => ({
         ...photo,
@@ -204,12 +224,12 @@ export default function Home() {
 
       setPhotos((current) => [...nextPhotos, ...current].slice(0, 24));
       setPhotoMessage("照片已上传，大家刷新后都能看见。");
+      closePhotoCaption();
     } catch (error) {
       console.warn("Photo upload failed", error);
       setPhotoMessage("照片上传失败，请稍后再试一次。");
     } finally {
       setIsUploadingPhotos(false);
-      event.target.value = "";
     }
   }
 
@@ -406,6 +426,19 @@ export default function Home() {
               placeholder="请输入你的名字"
             />
 
+            <label className="mt-5 block text-sm font-semibold" htmlFor="contact">
+              联系电话
+            </label>
+            <input
+              id="contact"
+              required
+              inputMode="tel"
+              value={form.contact}
+              onChange={(event) => setForm({ ...form, contact: event.target.value })}
+              className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+              placeholder="方便活动前联系确认"
+            />
+
             <fieldset className="mt-5">
               <legend className="text-sm font-semibold">是否出席</legend>
               <div className="mt-2 grid gap-3 sm:grid-cols-3">
@@ -423,7 +456,13 @@ export default function Home() {
                       name="attending"
                       value={value}
                       checked={form.attending === value}
-                      onChange={() => setForm({ ...form, attending: value as Rsvp["attending"] })}
+                      onChange={() =>
+                        setForm({
+                          ...form,
+                          attending: value as Rsvp["attending"],
+                          guests: Math.max(form.guests, 1),
+                        })
+                      }
                       className="sr-only"
                     />
                     {label}
@@ -432,18 +471,25 @@ export default function Home() {
               </div>
             </fieldset>
 
-            <label className="mt-5 block text-sm font-semibold" htmlFor="guests">
-              出席人数
-            </label>
-            <input
-              id="guests"
-              type="number"
-              min="1"
-              max="10"
-              value={form.guests}
-              onChange={(event) => setForm({ ...form, guests: Number(event.target.value) })}
-              className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
-            />
+            {form.attending !== "no" && (
+              <>
+                <label className="mt-5 block text-sm font-semibold" htmlFor="guests">
+                  出席人数
+                </label>
+                <select
+                  id="guests"
+                  value={form.guests}
+                  onChange={(event) => setForm({ ...form, guests: Number(event.target.value) })}
+                  className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] bg-white px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+                >
+                  {[1, 2, 3, 4, 5, 6].map((count) => (
+                    <option key={count} value={count}>
+                      {count} 人
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             <label className="mt-5 block text-sm font-semibold" htmlFor="message">
               老师，我想大声告诉你：
@@ -495,7 +541,7 @@ export default function Home() {
               type="file"
               accept="image/*"
               multiple
-              onChange={addPhotos}
+              onChange={preparePhotos}
               className="sr-only"
             />
             <button
@@ -552,22 +598,34 @@ export default function Home() {
         `}</style>
         <p className="mb-3 text-sm font-semibold text-[#7f6344]">留言墙</p>
         <h2 className="font-serif text-3xl font-bold sm:text-4xl">先说两句，见面再聊。</h2>
-        <div className="mt-5 h-56 overflow-hidden border-y border-[#d8ddd3] bg-[#f8f7f2] py-4 sm:mt-7 sm:h-64">
+        <div
+          className="mt-5 h-48 cursor-pointer overflow-hidden border-y border-[#d8ddd3] bg-[#f8f7f2] py-3 transition hover:bg-white/65 sm:mt-7 sm:h-52"
+          role="button"
+          tabIndex={0}
+          aria-label="查看所有留言"
+          onClick={() => setIsWallOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setIsWallOpen(true);
+            }
+          }}
+        >
           {rollingWallNotes.length ? (
-          <div className="guest-roll-track flex flex-col gap-3">
+          <div className="guest-roll-track flex flex-col gap-2">
             {rollingWallNotes.map((note, index) => (
               <blockquote
                 key={`${note.id}-${index}`}
-                className="flex min-h-20 items-start gap-3 rounded-md border border-[#d9dfd3] bg-white/86 px-4 py-3 text-sm leading-6 text-[#4d564a] shadow-sm backdrop-blur"
+                className="flex min-h-14 items-start gap-3 rounded-md border border-[#d9dfd3] bg-white/86 px-3 py-2 text-sm leading-5 text-[#4d564a] shadow-sm backdrop-blur"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5f7657] font-serif text-sm font-bold text-white">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#5f7657] font-serif text-xs font-bold text-white">
                   {note.avatar}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-[#7f6344]">
+                  <span className="block text-xs font-semibold text-[#7f6344]">
                     {note.author}：
                   </span>
-                  <span className="block text-sm">“{note.text}”</span>
+                  <span className="line-clamp-2 block text-sm">“{note.text}”</span>
                 </span>
               </blockquote>
             ))}
@@ -579,6 +637,109 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {isWallOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#20251f]/55 px-4 py-6 backdrop-blur-sm">
+          <section className="relative flex h-[66vh] w-full max-w-4xl flex-col rounded-md bg-[#f8f7f2] shadow-2xl shadow-black/25">
+            <div className="flex items-center justify-between border-b border-[#d8ddd3] px-5 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[#7f6344]">留言墙</p>
+                <h2 className="font-serif text-2xl font-bold text-[#20251f]">所有留言</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWallOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d8ddd3] bg-white text-[#40513b] transition hover:bg-[#eef3e9] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
+                aria-label="关闭留言墙"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {wallNotes.length ? (
+                <div className="grid gap-3">
+                  {wallNotes.map((note) => (
+                    <blockquote
+                      key={note.id}
+                      className="flex items-start gap-3 rounded-md border border-[#d9dfd3] bg-white px-4 py-3 text-sm leading-6 text-[#4d564a] shadow-sm"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#5f7657] font-serif text-sm font-bold text-white">
+                        {note.avatar}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-[#7f6344]">
+                          {note.author}：
+                        </span>
+                        <span className="block">“{note.text}”</span>
+                      </span>
+                    </blockquote>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-center text-sm leading-6 text-[#6b7f5f]">
+                  留言提交后，会在这里显示。
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {pendingPhotoFiles.length > 0 && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#20251f]/55 px-4 py-6 backdrop-blur-sm">
+          <form
+            onSubmit={uploadPendingPhotos}
+            className="w-full max-w-md rounded-md bg-white p-5 shadow-2xl shadow-black/25"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#7f6344]">一句话描述</p>
+                <h2 className="mt-1 font-serif text-2xl font-bold text-[#20251f]">
+                  给这批照片加个标题
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closePhotoCaption}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d8ddd3] text-[#40513b] transition hover:bg-[#eef3e9] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
+                aria-label="取消上传照片"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+            <label className="mt-5 block text-sm font-semibold" htmlFor="photo-caption">
+              照片描述
+            </label>
+            <input
+              id="photo-caption"
+              autoFocus
+              value={captionDraft}
+              onChange={(event) => setCaptionDraft(event.target.value)}
+              className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+              placeholder="例如：2025 浦江郊野公园烧烤趴"
+            />
+            <p className="mt-3 text-sm text-[#6b7f5f]">
+              已选择 {pendingPhotoFiles.length} 张照片。
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={closePhotoCaption}
+                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-[#cbd4c6] px-4 font-semibold text-[#40513b] transition hover:bg-[#eef3e9]"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={isUploadingPhotos}
+                className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md bg-[#5f7657] px-4 font-semibold text-white transition hover:bg-[#4d6447] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isUploadingPhotos ? "正在上传..." : "确认上传"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <button
         type="button"
