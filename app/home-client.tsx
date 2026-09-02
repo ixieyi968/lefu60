@@ -149,7 +149,7 @@ export default function HomeClient({
   const rollingWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
 
   useEffect(() => {
-    setTimeLeft(getTimeLeft());
+    document.documentElement.classList.add("js-ready");
     const timer = window.setInterval(() => setTimeLeft(getTimeLeft()), 1000);
     try {
       const saved = window.localStorage.getItem("lefu60-rsvp");
@@ -190,7 +190,10 @@ export default function HomeClient({
         });
     }
 
-    return () => window.clearInterval(timer);
+    return () => {
+      document.documentElement.classList.remove("js-ready");
+      window.clearInterval(timer);
+    };
   }, []);
 
   function rememberRsvp() {
@@ -550,58 +553,84 @@ export default function HomeClient({
 
       <section className="bg-[#f8f7f2]">
         <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
+          <style>{`
+            .photo-enhanced {
+              display: none;
+            }
+            .photo-fallback {
+              display: block;
+            }
+            .js-ready .photo-enhanced {
+              display: block;
+            }
+            .js-ready .photo-fallback {
+              display: none;
+            }
+          `}</style>
           <p className="mb-3 text-sm font-semibold text-[#7f6344]">照片墙</p>
-          <form
-            action="/api/photos"
-            method="post"
-            encType="multipart/form-data"
-            className="lg:w-[1000px]"
-          >
+          <div className="lg:w-[1000px]">
             <h2 className="font-serif text-3xl font-bold sm:text-4xl">把照片也带回来。</h2>
             <p className="mt-4 text-base leading-7 text-[#4d564a] sm:text-lg sm:leading-8">
               翻翻旧手机、硬盘和云盘。毕业照、实验室日常、团建、出差，还有那些当年觉得好笑、现在越看越有意思的照片。当然，和家人的合照、近照也欢迎，方便大家看看这些年彼此都“更新”成什么版本了。😂
             </p>
-            <input
-              ref={photoInputRef}
-              id="photo-files"
-              name="photos"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={preparePhotos}
-              className="sr-only"
-            />
-            <label
-              htmlFor="photo-files"
-              className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
+            <div className="photo-enhanced">
+              <input
+                ref={photoInputRef}
+                id="photo-files"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={preparePhotos}
+                className="sr-only"
+              />
+              <label
+                htmlFor="photo-files"
+                className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isUploadingPhotos ? "正在上传..." : "上传珍贵史料"}
+              </label>
+            </div>
+            <form
+              action="/api/photos"
+              method="post"
+              encType="multipart/form-data"
+              className="photo-fallback mt-5 rounded-md border border-[#d8ddd3] bg-white/70 p-4"
             >
-              {isUploadingPhotos ? "正在上传..." : "上传珍贵史料"}
-            </label>
-            <label className="mt-4 block text-sm font-semibold" htmlFor="inline-photo-caption">
-              一句话描述
-            </label>
-            <input
-              id="inline-photo-caption"
-              name="caption"
-              value={captionDraft}
-              onChange={(event) => setCaptionDraft(event.target.value)}
-              className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] bg-white px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
-              placeholder="例如：2025 浦江郊野公园烧烤趴"
-            />
-            <input type="hidden" name="uploaderName" value={form.name} />
-            <button
-              type="submit"
-              disabled={isUploadingPhotos}
-              className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-[#cbd4c6] bg-white px-5 font-semibold text-[#40513b] transition hover:bg-[#eef3e9] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              确认上传
-            </button>
+              <label className="block text-sm font-semibold" htmlFor="photo-fallback-files">
+                上传照片
+              </label>
+              <input
+                id="photo-fallback-files"
+                name="photos"
+                type="file"
+                accept="image/*"
+                multiple
+                required
+                className="mt-2 block w-full rounded-md border border-[#cbd4c6] bg-white px-3 py-2 text-sm outline-none transition file:mr-4 file:rounded-md file:border-0 file:bg-[#5f7657] file:px-3 file:py-2 file:font-semibold file:text-white focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+              />
+              <label className="mt-4 block text-sm font-semibold" htmlFor="photo-fallback-caption">
+                一句话描述
+              </label>
+              <input
+                id="photo-fallback-caption"
+                name="caption"
+                className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] bg-white px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+                placeholder="例如：2025 浦江郊野公园烧烤趴"
+              />
+              <input type="hidden" name="uploaderName" value={form.name} />
+              <button
+                type="submit"
+                className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-[#cbd4c6] bg-white px-5 font-semibold text-[#40513b] transition hover:bg-[#eef3e9]"
+              >
+                确认上传
+              </button>
+            </form>
             {photoMessage && (
               <p id="photos-status" className="mt-4 rounded-md bg-[#eef3e9] px-4 py-3 text-sm font-semibold text-[#506744]">
                 {photoMessage}
               </p>
             )}
-          </form>
+          </div>
           <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3 lg:items-start">
             {photos.map((photo, index) => (
               <figure
