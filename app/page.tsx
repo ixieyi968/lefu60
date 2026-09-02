@@ -265,42 +265,38 @@ export default function Home() {
     }
   }
 
-  if (!isOpened) {
-    return (
-      <main className="relative min-h-screen overflow-hidden bg-[#edf3ef] text-[#17202b]">
-        <img
-          src="/canopy-poster.jpg"
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(255,255,255,0.64)_0%,rgba(255,255,255,0.32)_36%,rgba(238,244,239,0.14)_68%)]" />
-        <audio ref={audioRef} src="/audio/pingfan-road.m4a" loop preload="auto" />
-
-        <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-5 text-center">
-          <h1 className="max-w-5xl text-[31px] font-bold leading-tight text-[#162033] sm:text-5xl lg:text-6xl">
-            <span className="block whitespace-nowrap">人生一甲子🎉乐福正当时</span>
-            <span className="mt-3 block">你导喊你回家吃饭啦!⛷️</span>
-          </h1>
-          <p className="mt-8 text-lg font-medium text-[#263145] sm:text-xl">
-            2026年9月26日星期六 · 14:00
-          </p>
-          <button
-            type="button"
-            onClick={openInvitation}
-            className="mt-10 inline-flex min-h-14 items-center gap-3 rounded-full bg-[#5f7657] px-9 text-lg font-bold text-white shadow-xl shadow-[#41533c]/20 transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/30"
-          >
-            <Mail className="h-5 w-5" aria-hidden="true" />
-            打开邀请函
-          </button>
-        </section>
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#eef0ec] text-[#20251f]">
+      {!isOpened && (
+        <section className="relative min-h-screen overflow-hidden bg-[#edf3ef] text-[#17202b]">
+          <img
+            src="/canopy-poster.jpg"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(255,255,255,0.64)_0%,rgba(255,255,255,0.32)_36%,rgba(238,244,239,0.14)_68%)]" />
+
+          <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-5 text-center">
+            <h1 className="max-w-5xl text-[31px] font-bold leading-tight text-[#162033] sm:text-5xl lg:text-6xl">
+              <span className="block whitespace-nowrap">人生一甲子🎉乐福正当时</span>
+              <span className="mt-3 block">你导喊你回家吃饭啦!⛷️</span>
+            </h1>
+            <p className="mt-8 text-lg font-medium text-[#263145] sm:text-xl">
+              2026年9月26日星期六 · 14:00
+            </p>
+            <a
+              href="#invitation"
+              onClick={openInvitation}
+              className="mt-10 inline-flex min-h-14 items-center gap-3 rounded-full bg-[#5f7657] px-9 text-lg font-bold text-white shadow-xl shadow-[#41533c]/20 transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/30"
+            >
+              <Mail className="h-5 w-5" aria-hidden="true" />
+              打开邀请函
+            </a>
+          </div>
+        </section>
+      )}
       <audio ref={audioRef} src="/audio/pingfan-road.m4a" loop preload="auto" />
-      <section className="relative overflow-hidden sm:min-h-[92vh]">
+      <section id="invitation" className="relative overflow-hidden sm:min-h-[92vh]">
         <div className="relative sm:absolute sm:inset-0 sm:h-full">
           <img
             src="/hero-clean.png"
