@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
+  Download,
   Mail,
   MapPin,
   Music2,
@@ -104,6 +105,7 @@ export default function HomeClient({
 }: HomeClientProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const lastPhotoTapRef = useRef<{ id: string; at: number } | null>(null);
   const [showGlassesTip, setShowGlassesTip] = useState(false);
   const rsvpMessage =
     rsvpStatus === "success"
@@ -136,6 +138,7 @@ export default function HomeClient({
         : "",
   );
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
   const [captionDraft, setCaptionDraft] = useState("");
   const [timeLeft, setTimeLeft] = useState(initialTimeLeft);
@@ -254,6 +257,25 @@ export default function HomeClient({
     } finally {
       setIsUploadingPhotos(false);
     }
+  }
+
+  function getPhotoDownloadName(photo: Photo) {
+    const safeCaption = photo.caption.replace(/[\\/:*?"<>|]/g, "-").trim();
+    return `${safeCaption || "lefu60-photo"}.jpg`;
+  }
+
+  function handlePhotoTouchEnd(event: React.TouchEvent<HTMLElement>, photo: Photo) {
+    const now = Date.now();
+    const lastTap = lastPhotoTapRef.current;
+
+    if (lastTap?.id === photo.id && now - lastTap.at < 360) {
+      event.preventDefault();
+      setSelectedPhoto(photo);
+      lastPhotoTapRef.current = null;
+      return;
+    }
+
+    lastPhotoTapRef.current = { id: photo.id, at: now };
   }
 
   function openInvitation() {
@@ -639,22 +661,85 @@ export default function HomeClient({
                   index === 1 ? "sm:mt-10" : index === 2 ? "sm:mt-3" : ""
                 }`}
               >
-                <span className="absolute -top-3 left-1/2 h-7 w-24 -translate-x-1/2 rotate-[-3deg] bg-[#f3dfad]/75 shadow-sm" />
-                <div className="aspect-[4/3] overflow-hidden rounded-[2px] bg-[#eef0ec]">
-                  <img
-                    src={photo.src}
-                    alt={photo.name}
-                    className={`h-full w-full object-cover ${photo.imageClass ?? ""}`}
-                  />
-                </div>
-                <figcaption className="mt-3 font-serif text-sm font-bold leading-5 text-[#253024] sm:text-lg sm:leading-6">
-                  {photo.caption}
-                </figcaption>
+                <button
+                  type="button"
+                  onDoubleClick={() => setSelectedPhoto(photo)}
+                  onTouchEnd={(event) => handlePhotoTouchEnd(event, photo)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") setSelectedPhoto(photo);
+                  }}
+                  className="block w-full touch-manipulation text-left focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
+                  aria-label={`双击放大查看：${photo.caption}`}
+                  title="双击放大查看"
+                >
+                  <span className="absolute -top-3 left-1/2 h-7 w-24 -translate-x-1/2 rotate-[-3deg] bg-[#f3dfad]/75 shadow-sm" />
+                  <div className="aspect-[4/3] overflow-hidden rounded-[2px] bg-[#eef0ec]">
+                    <img
+                      src={photo.src}
+                      alt={photo.name}
+                      className={`h-full w-full object-cover ${photo.imageClass ?? ""}`}
+                    />
+                  </div>
+                  <figcaption className="mt-3 font-serif text-sm font-bold leading-5 text-[#253024] sm:text-lg sm:leading-6">
+                    {photo.caption}
+                  </figcaption>
+                </button>
               </figure>
             ))}
           </div>
         </div>
       </section>
+
+      {selectedPhoto && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-[#20251f]/70 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <section
+            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col rounded-md bg-[#f8f7f2] shadow-2xl shadow-black/25"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-[#d8ddd3] px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[#7f6344]">照片墙</p>
+                <h2 className="truncate font-serif text-xl font-bold text-[#20251f] sm:text-2xl">
+                  {selectedPhoto.caption}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPhoto(null)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8ddd3] bg-white text-[#40513b] transition hover:bg-[#eef3e9] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
+                aria-label="关闭照片查看"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-[#20251f] p-3 sm:p-5">
+              <img
+                src={selectedPhoto.src}
+                alt={selectedPhoto.caption}
+                className={`max-h-[68vh] w-auto max-w-full object-contain ${selectedPhoto.imageClass ?? ""}`}
+              />
+            </div>
+            <div className="flex flex-col gap-3 border-t border-[#d8ddd3] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <p className="text-sm leading-6 text-[#5f6b5b]">
+                手机端可点保存，若浏览器打开预览图，也可长按图片保存到相册。
+              </p>
+              <a
+                href={selectedPhoto.src}
+                download={getPhotoDownloadName(selectedPhoto)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                保存照片
+              </a>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section id="guest-wall" className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
         <style>{`
