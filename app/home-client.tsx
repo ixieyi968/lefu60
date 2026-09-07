@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
-  Download,
   Mail,
   MapPin,
   Music2,
@@ -257,11 +256,6 @@ export default function HomeClient({
     } finally {
       setIsUploadingPhotos(false);
     }
-  }
-
-  function getPhotoDownloadName(photo: Photo) {
-    const safeCaption = photo.caption.replace(/[\\/:*?"<>|]/g, "-").trim();
-    return `${safeCaption || "lefu60-photo"}.jpg`;
   }
 
   function handlePhotoTouchEnd(event: React.TouchEvent<HTMLElement>, photo: Photo) {
@@ -611,6 +605,9 @@ export default function HomeClient({
               >
                 {isUploadingPhotos ? "正在上传..." : "上传珍贵史料"}
               </label>
+              <p className="mt-3 text-sm font-medium leading-6 text-[#6b7f5f]">
+                双击图片可放大查看并保存
+              </p>
             </div>
             <form
               action="/api/photos"
@@ -722,20 +719,8 @@ export default function HomeClient({
                 className={`max-h-[68vh] w-auto max-w-full object-contain ${selectedPhoto.imageClass ?? ""}`}
               />
             </div>
-            <div className="flex flex-col gap-3 border-t border-[#d8ddd3] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <p className="text-sm leading-6 text-[#5f6b5b]">
-                手机端可点保存，若浏览器打开预览图，也可长按图片保存到相册。
-              </p>
-              <a
-                href={selectedPhoto.src}
-                download={getPhotoDownloadName(selectedPhoto)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#5f7657] px-5 font-semibold text-white transition hover:bg-[#4d6447] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                保存照片
-              </a>
+            <div className="border-t border-[#d8ddd3] px-4 py-3 sm:px-5">
+              <p className="text-sm leading-6 text-[#5f6b5b]">长按图片保存到手机相册</p>
             </div>
           </section>
         </div>
