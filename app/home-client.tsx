@@ -19,6 +19,14 @@ import {
   uploadPhoto,
 } from "@/lib/supabase-client";
 import type { RsvpPayload } from "@/lib/supabase-client";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 
 type Rsvp = RsvpPayload;
 
@@ -122,7 +130,7 @@ export default function HomeClient({
             rotation: photo.rotation ?? photoRotations[index % photoRotations.length],
           })),
           ...initialPhotos,
-        ].slice(0, 24)
+        ]
       : initialPhotos,
   );
   const [wallNotes, setWallNotes] = useState<WallNote[]>(
@@ -140,6 +148,9 @@ export default function HomeClient({
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
   const [captionDraft, setCaptionDraft] = useState("");
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
   const [timeLeft, setTimeLeft] = useState(initialTimeLeft);
   const [form, setForm] = useState<Rsvp>({
     name: "",
@@ -149,6 +160,7 @@ export default function HomeClient({
     message: "",
   });
   const rollingWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
+  const firstPhotoId = photos[0]?.id;
 
   useEffect(() => {
     document.documentElement.classList.add("js-ready");
@@ -180,7 +192,7 @@ export default function HomeClient({
                 rotation: photoRotations[index % photoRotations.length],
               })),
               ...initialPhotos,
-            ].slice(0, 24));
+            ]);
           }
 
           if (notesResult.status === "fulfilled" && notesResult.value.length) {
@@ -197,6 +209,53 @@ export default function HomeClient({
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!carouselApi) return;
+
+    const updateCurrentSlide = () => setCurrentSlide(carouselApi.selectedScrollSnap());
+    carouselApi.on("select", updateCurrentSlide);
+    carouselApi.on("reInit", updateCurrentSlide);
+
+    return () => {
+      carouselApi.off("select", updateCurrentSlide);
+      carouselApi.off("reInit", updateCurrentSlide);
+    };
+  }, [carouselApi]);
+
+  useEffect(() => {
+    if (!carouselApi) return;
+    carouselApi.reInit();
+    carouselApi.scrollTo(0, true);
+  }, [carouselApi, firstPhotoId]);
+
+  useEffect(() => {
+    if (!carouselApi || photos.length < 2 || isCarouselPaused) return;
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let autoplay: number | undefined;
+
+    const stopAutoplay = () => {
+      if (autoplay !== undefined) window.clearInterval(autoplay);
+      autoplay = undefined;
+    };
+    const syncAutoplay = () => {
+      stopAutoplay();
+      if (!mediaQuery.matches && document.visibilityState === "visible") {
+        autoplay = window.setInterval(() => carouselApi.scrollNext(), 5000);
+      }
+    };
+
+    syncAutoplay();
+    mediaQuery.addEventListener("change", syncAutoplay);
+    document.addEventListener("visibilitychange", syncAutoplay);
+
+    return () => {
+      stopAutoplay();
+      mediaQuery.removeEventListener("change", syncAutoplay);
+      document.removeEventListener("visibilitychange", syncAutoplay);
+    };
+  }, [carouselApi, photos.length, isCarouselPaused]);
 
   function rememberRsvp() {
     setIsSavingRsvp(true);
@@ -247,7 +306,7 @@ export default function HomeClient({
         rotation: photoRotations[(photos.length + index) % photoRotations.length],
       }));
 
-      setPhotos((current) => [...nextPhotos, ...current].slice(0, 24));
+      setPhotos((current) => [...nextPhotos, ...current]);
       setPhotoMessage("照片已上传，大家刷新后都能看见。");
       closePhotoCaption();
     } catch (error) {
@@ -650,6 +709,67 @@ export default function HomeClient({
               </p>
             )}
           </div>
+          {photos.length > 0 && (
+            <div
+              className="mt-8 sm:mt-10"
+              onMouseEnter={() => setIsCarouselPaused(true)}
+              onMouseLeave={() => setIsCarouselPaused(false)}
+              onFocusCapture={() => setIsCarouselPaused(true)}
+              onBlurCapture={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setIsCarouselPaused(false);
+                }
+              }}
+            >
+              <Carousel
+                setApi={setCarouselApi}
+                opts={{ loop: true }}
+                aria-label="照片滚动放映墙"
+                className="mx-auto max-w-5xl"
+              >
+                <CarouselContent className="-ml-0">
+                  {photos.map((photo) => (
+                    <CarouselItem key={`slideshow-${photo.id}`} className="pl-0">
+                      <figure className="relative overflow-hidden rounded-md border border-[#d9dfd3] bg-[#20251f] shadow-xl shadow-[#41533c]/20">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPhoto(photo)}
+                          className="block w-full text-left focus:outline-none focus:ring-4 focus:ring-inset focus:ring-[#f3dfad]/60"
+                          aria-label={`放大查看：${photo.caption}`}
+                        >
+                          <div className="flex aspect-[4/3] items-center justify-center overflow-hidden sm:aspect-[16/9]">
+                            <img
+                              src={photo.src}
+                              alt={photo.name}
+                              className={`h-full w-full object-contain ${photo.imageClass ?? ""}`}
+                            />
+                          </div>
+                          <figcaption className="absolute inset-x-0 bottom-0 bg-[#17202b]/88 px-4 py-3 pr-20 font-serif text-base font-bold leading-6 text-white backdrop-blur-sm sm:px-6 sm:py-4 sm:pr-24 sm:text-xl sm:leading-7">
+                            {photo.caption}
+                          </figcaption>
+                        </button>
+                      </figure>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                {photos.length > 1 && (
+                  <>
+                    <CarouselPrevious
+                      className="left-3 h-10 w-10 border-white/70 bg-white/90 text-[#40513b] hover:bg-white sm:left-4"
+                      aria-label="上一张照片"
+                    />
+                    <CarouselNext
+                      className="right-3 h-10 w-10 border-white/70 bg-white/90 text-[#40513b] hover:bg-white sm:right-4"
+                      aria-label="下一张照片"
+                    />
+                    <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-[#17202b]/78 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm sm:bottom-4 sm:right-4 sm:text-sm">
+                      {currentSlide + 1} / {photos.length}
+                    </span>
+                  </>
+                )}
+              </Carousel>
+            </div>
+          )}
           <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3 lg:items-start">
             {photos.map((photo, index) => (
               <figure
@@ -733,7 +853,7 @@ export default function HomeClient({
             to { transform: translateY(-50%); }
           }
           .guest-roll-track {
-            animation: guest-roll 24s linear infinite;
+            animation: guest-roll var(--guest-roll-duration, 24s) linear infinite;
           }
           .guest-roll-track:hover {
             animation-play-state: paused;
@@ -756,7 +876,12 @@ export default function HomeClient({
           aria-label="查看所有留言"
         >
           {rollingWallNotes.length ? (
-          <div className="guest-roll-track flex flex-col gap-2">
+          <div
+            className="guest-roll-track flex flex-col gap-2"
+            style={{
+              "--guest-roll-duration": `${Math.max(24, wallNotes.length * 4)}s`,
+            } as React.CSSProperties}
+          >
             {rollingWallNotes.map((note, index) => (
               <blockquote
                 key={`${note.id}-${index}`}

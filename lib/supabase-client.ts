@@ -59,6 +59,21 @@ async function supabaseFetch<T>(path: string, init?: RequestInit) {
   return JSON.parse(text) as T;
 }
 
+async function supabaseFetchAll<T>(path: string) {
+  const pageSize = 1000;
+  const rows: T[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const separator = path.includes("?") ? "&" : "?";
+    const page = await supabaseFetch<T[]>(
+      `${path}${separator}limit=${pageSize}&offset=${offset}`,
+    );
+
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
 export async function createRsvp(form: RsvpPayload) {
   await supabaseFetch<null>("/rest/v1/rsvps", {
     method: "POST",
@@ -77,8 +92,8 @@ export async function createRsvp(form: RsvpPayload) {
 }
 
 export async function listWallNotes() {
-  const rows = await supabaseFetch<RsvpRow[]>(
-    "/rest/v1/rsvps?select=id,name,message&message=not.is.null&order=created_at.desc&limit=24",
+  const rows = await supabaseFetchAll<RsvpRow>(
+    "/rest/v1/rsvps?select=id,name,message&message=not.is.null&order=created_at.desc",
   );
 
   return rows
@@ -95,8 +110,8 @@ export async function listWallNotes() {
 }
 
 export async function listPhotos() {
-  const rows = await supabaseFetch<PhotoRow[]>(
-    "/rest/v1/photos?select=id,image_url,caption,uploader_name&order=created_at.desc&limit=24",
+  const rows = await supabaseFetchAll<PhotoRow>(
+    "/rest/v1/photos?select=id,image_url,caption,uploader_name&order=created_at.desc",
   );
 
   return rows.map((row) => ({
