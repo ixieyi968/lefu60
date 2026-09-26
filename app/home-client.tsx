@@ -1192,7 +1192,7 @@ export default function HomeClient({
             )}
           </div>
 
-          <aside className="relative flex min-h-0 flex-col items-center justify-between bg-[#68131a]/72 px-2 py-3 sm:px-4 sm:py-5" aria-label="留言大屏控制区">
+          <aside className="relative flex min-h-0 flex-col items-center justify-start bg-[#68131a]/72 px-2 py-3 sm:px-4 sm:py-5" aria-label="留言大屏控制区">
             <div className="grid grid-cols-1 gap-2 self-end sm:grid-cols-3">
             <button
               type="button"
@@ -1223,15 +1223,16 @@ export default function HomeClient({
             </button>
             </div>
 
-            <div className="w-full max-w-[210px] border-2 border-[#ddb166] bg-[#f8e4b5] p-1.5 shadow-[0_8px_24px_rgba(52,5,10,0.38)] sm:p-2.5">
+            <div className="mt-[clamp(18px,4vh,56px)] w-full max-w-[210px] border-2 border-[#ddb166] bg-[#f8e4b5] p-1.5 shadow-[0_8px_24px_rgba(52,5,10,0.38)] sm:p-2.5">
               {/* oxlint-disable-next-line next/no-img-element */}
               <img
                 src="/wall-stage-qr.png"
                 alt="扫码进入网页留言"
                 className="aspect-square w-full bg-[#f8e4b5] object-contain"
               />
-              <p className="border-t border-[#c98f49] pt-1.5 text-center font-serif text-[10px] font-bold leading-tight text-[#9d1f29] sm:pt-2 sm:text-sm">
-                扫码留言上墙
+              <p className="border-t border-[#c98f49] pt-1.5 text-center font-serif text-[10px] leading-snug text-[#9d1f29] sm:pt-2 sm:text-sm">
+                扫码留言上墙；若无法打开，请在浏览器访问：
+                <strong className="mt-1 block whitespace-nowrap font-bold">www.lefu60.beer 🍺</strong>
               </p>
             </div>
           </aside>
