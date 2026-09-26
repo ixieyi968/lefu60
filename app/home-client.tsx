@@ -26,7 +26,7 @@ import {
   uploadPhoto,
 } from "@/lib/supabase-client";
 import type { PhotoComment, PhotoData, RsvpPayload, WallNote } from "@/lib/supabase-client";
-import { PhotoCard } from "@/components/photo-card";
+import { PhotoCard, PhotoModalActions } from "@/components/photo-card";
 import {
   Carousel,
   CarouselContent,
@@ -170,6 +170,10 @@ export default function HomeClient({
   const rollingWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
   const stageWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
   const photoOrderKey = sortedPhotos.map((photo) => photo.id).join("|");
+  const currentCarouselPhoto = sortedPhotos[currentSlide];
+  const currentCarouselComments = currentCarouselPhoto
+    ? commentsByPhotoId[currentCarouselPhoto.id] ?? []
+    : [];
 
   useEffect(() => {
     document.documentElement.classList.add("js-ready");
@@ -812,6 +816,18 @@ export default function HomeClient({
               </p>
             )}
           </div>
+          <style>{`
+            @keyframes photo-danmaku {
+              from { transform: translateX(110vw); }
+              to { transform: translateX(-120%); }
+            }
+            .photo-danmaku-item {
+              animation: photo-danmaku var(--danmaku-duration, 16s) linear infinite;
+            }
+            @media (prefers-reduced-motion: reduce) {
+              .photo-danmaku-layer { display: none; }
+            }
+          `}</style>
           {sortedPhotos.length > 0 && (
             <div
               ref={photoSlideshowRef}
@@ -860,6 +876,23 @@ export default function HomeClient({
                     </CarouselItem>
                   ))}
                 </CarouselContent>
+                {currentCarouselComments.length > 0 && (
+                  <div className="photo-danmaku-layer pointer-events-none absolute inset-x-0 top-0 z-10 h-[10%] min-h-12 overflow-hidden pr-16" aria-hidden="true">
+                    {currentCarouselComments.slice(-4).map((comment, index) => (
+                      <span
+                        key={`danmaku-${currentCarouselPhoto.id}-${comment.id}`}
+                        className="photo-danmaku-item absolute left-0 whitespace-nowrap rounded-full border border-[#f7e5b8]/80 bg-[#a8242d]/88 px-4 py-1.5 text-sm font-semibold text-[#fff4d6] shadow-lg backdrop-blur-sm sm:text-base"
+                        style={{
+                          top: `${8 + (index % 2) * 48}%`,
+                          "--danmaku-duration": `${14 + (index % 3) * 3}s`,
+                          animationDelay: `${index * -4}s`,
+                        } as React.CSSProperties}
+                      >
+                        {comment.author}：{comment.body}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={togglePhotoFullscreen}
@@ -932,15 +965,25 @@ export default function HomeClient({
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <div className="flex min-h-0 flex-1 items-center justify-center bg-[#20251f] p-3 sm:p-5">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[#20251f] p-3 sm:p-5">
               <img
                 src={selectedPhoto.src}
                 alt={selectedPhoto.caption}
-                className="max-h-[68vh] w-auto max-w-full object-contain"
+                className="h-full w-full object-contain"
               />
             </div>
             <div className="border-t border-[#d8ddd3] px-4 py-3 sm:px-5">
-              <p className="text-sm leading-6 text-[#5f6b5b]">长按图片保存到手机相册</p>
+              <PhotoModalActions
+                key={selectedPhoto.id}
+                photo={selectedPhoto}
+                comments={commentsByPhotoId[selectedPhoto.id] ?? []}
+                defaultAuthor={form.name}
+                onPhotoChanged={handlePhotoChanged}
+                onCommentAdded={(comment) =>
+                  setPhotoComments((current) => [...current, comment])
+                }
+              />
+              <p className="mt-3 text-sm leading-6 text-[#5f6b5b]">长按图片保存到手机相册</p>
             </div>
           </section>
         </div>
@@ -1037,20 +1080,20 @@ export default function HomeClient({
 
       <div
         ref={wallStageRef}
-        className={`fixed inset-0 flex h-screen w-screen flex-col overflow-hidden bg-[#17202b] text-white transition-opacity ${isWallStageOpen ? "z-[100] opacity-100" : "pointer-events-none -z-50 opacity-0"}`}
+        className={`fixed inset-0 flex h-screen w-screen flex-col overflow-hidden bg-[#c7383d] text-[#3b2924] transition-opacity ${isWallStageOpen ? "z-[100] opacity-100" : "pointer-events-none -z-50 opacity-0"}`}
         aria-hidden={!isWallStageOpen}
         inert={!isWallStageOpen}
       >
-        <header className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/15 bg-[#17202b]/92 px-5 py-4 backdrop-blur-sm sm:px-8">
+        <header className="relative z-20 flex shrink-0 items-center justify-between border-b-4 border-[#a8242d] bg-[#f7e8c3] px-5 py-4 shadow-lg sm:px-8">
           <div>
-            <p className="text-xs font-semibold text-[#f3dfad]">乐福老师 60 岁生日会</p>
-            <h2 className="mt-1 font-serif text-2xl font-bold sm:text-3xl">来宾留言</h2>
+            <p className="text-xs font-semibold text-[#a8242d]">乐福正当时</p>
+            <h2 className="mt-1 font-serif text-2xl font-bold text-[#3b2924] sm:text-3xl">留言板</h2>
           </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setIsWallStagePaused((paused) => !paused)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/30 bg-white/10 text-white hover:bg-white/20"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[#c99f62] bg-[#fff4d6] text-[#a8242d] hover:bg-white"
               aria-label={isWallStagePaused ? "继续播放留言" : "暂停留言播放"}
               title={isWallStagePaused ? "继续播放" : "暂停播放"}
             >
@@ -1059,7 +1102,7 @@ export default function HomeClient({
             <button
               type="button"
               onClick={toggleWallStageFullscreen}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/30 bg-white/10 text-white hover:bg-white/20"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[#c99f62] bg-[#fff4d6] text-[#a8242d] hover:bg-white"
               aria-label={isWallStageFullscreen ? "退出浏览器全屏" : "进入浏览器全屏"}
               title={isWallStageFullscreen ? "退出全屏" : "进入全屏"}
             >
@@ -1068,7 +1111,7 @@ export default function HomeClient({
             <button
               type="button"
               onClick={closeWallStage}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/30 bg-white/10 text-white hover:bg-white/20"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[#c99f62] bg-[#fff4d6] text-[#a8242d] hover:bg-white"
               aria-label="关闭留言大屏"
               title="关闭"
             >
@@ -1076,7 +1119,7 @@ export default function HomeClient({
             </button>
           </div>
         </header>
-        <div className="min-h-0 flex-1 overflow-hidden px-5 py-6 sm:px-[8vw] sm:py-8">
+        <div className="min-h-0 flex-1 overflow-hidden border-x-[clamp(10px,3vw,48px)] border-[#a8242d] bg-[#f4dca9] px-5 py-6 sm:px-[6vw] sm:py-8">
           {stageWallNotes.length ? (
             <div
               className={`${wallNotes.length > 1 ? "guest-stage-track" : ""} flex flex-col gap-4 ${isWallStagePaused ? "is-paused" : ""}`}
@@ -1087,20 +1130,20 @@ export default function HomeClient({
               {stageWallNotes.map((note, index) => (
                 <blockquote
                   key={`stage-${note.id}-${index}`}
-                  className="flex min-h-28 items-center gap-5 rounded-md border border-white/15 bg-white/10 px-5 py-5 shadow-lg backdrop-blur-sm sm:min-h-32 sm:gap-7 sm:px-8"
+                  className="flex min-h-28 items-center gap-5 rounded-md border-2 border-[#d3ad6f] bg-[#fff1cf] px-5 py-5 shadow-lg shadow-[#8e2028]/15 sm:min-h-32 sm:gap-7 sm:px-8"
                 >
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#f3dfad] font-serif text-xl font-bold text-[#40513b] sm:h-16 sm:w-16 sm:text-2xl">
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#c7383d] font-serif text-xl font-bold text-[#fff1cf] ring-4 ring-[#e1bd7e] sm:h-16 sm:w-16 sm:text-2xl">
                     {note.avatar}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-base font-semibold text-[#f3dfad] sm:text-xl">{note.author}</span>
-                    <span className="mt-2 block break-words font-serif text-xl leading-relaxed sm:text-3xl">“{note.text}”</span>
+                    <span className="block text-base font-semibold text-[#a8242d] sm:text-xl">{note.author}</span>
+                    <span className="mt-2 block break-words font-serif text-xl leading-relaxed text-[#3b2924] sm:text-3xl">“{note.text}”</span>
                   </span>
                 </blockquote>
               ))}
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center text-center font-serif text-3xl text-white/70">还没有留言，期待第一句话。</div>
+            <div className="flex h-full items-center justify-center text-center font-serif text-3xl text-[#7b312e]">还没有留言，期待第一句话。</div>
           )}
         </div>
       </div>
