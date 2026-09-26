@@ -23,6 +23,7 @@ import {
   listPhotoComments,
   listPhotos,
   listWallNotes,
+  subscribeToWallNotes,
 } from "@/lib/supabase-client";
 import type { PhotoComment, PhotoData, RsvpPayload, WallNote } from "@/lib/supabase-client";
 import { PhotoCard, PhotoModalActions } from "@/components/photo-card";
@@ -81,6 +82,12 @@ function getTimeLeft() {
     minutes: Math.floor((diff / 60_000) % 60),
     seconds: Math.floor((diff / 1_000) % 60),
   };
+}
+
+function mergeWallNotes(current: WallNote[], incoming: WallNote[]) {
+  const notesById = new Map(current.map((note) => [note.id, note]));
+  incoming.forEach((note) => notesById.set(note.id, note));
+  return [...notesById.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 function shouldLoadCarouselPhoto(index: number, currentIndex: number, total: number) {
@@ -282,6 +289,41 @@ export default function HomeClient({
     document.addEventListener("fullscreenchange", syncFullscreenState);
     return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
   }, []);
+
+  useEffect(() => {
+    if (!isWallStageOpen || !isSupabaseConfigured) return;
+
+    let isActive = true;
+    const reconcileWallNotes = async () => {
+      try {
+        const notes = await listWallNotes();
+        if (isActive && notes.length) {
+          setWallNotes((current) => mergeWallNotes(current, notes));
+        }
+      } catch (error) {
+        if (isActive) console.warn("Wall note realtime reconciliation failed", error);
+      }
+    };
+
+    const unsubscribe = subscribeToWallNotes(
+      (note) => {
+        if (isActive) setWallNotes((current) => mergeWallNotes(current, [note]));
+      },
+      (status) => {
+        if (!isActive) return;
+        if (status === "SUBSCRIBED") {
+          void reconcileWallNotes();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Wall note realtime subscription ${status.toLowerCase()}`);
+        }
+      },
+    );
+
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
+  }, [isWallStageOpen]);
 
   useEffect(() => {
     if (!carouselApi) return;
@@ -1167,6 +1209,7 @@ export default function HomeClient({
           <div className="min-h-0 overflow-hidden border-r border-[#d8a95f]/70 px-3 py-4 sm:px-[clamp(24px,4vw,64px)] sm:py-7">
             {stageWallNotes.length ? (
               <div
+                key={`${wallNotes[0]?.id ?? "empty"}-${wallNotes.length}`}
                 className={`${wallNotes.length > 1 ? "guest-stage-track" : ""} flex flex-col gap-3 sm:gap-4 ${isWallStagePaused ? "is-paused" : ""}`}
                 style={{
                   "--guest-stage-duration": `${Math.max(48, wallNotes.length * 4)}s`,

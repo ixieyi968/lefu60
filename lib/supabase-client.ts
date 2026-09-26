@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js";
+
 export type RsvpPayload = {
   name: string;
   attending: "yes" | "family" | "no";
@@ -68,6 +70,7 @@ const defaultSupabaseAnonKey = "sb_publishable_jyIV4HuQpyEVRzGwZKgoDg_Vg_FS6kH";
 const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || defaultSupabaseUrl;
 const supabaseUrl = rawSupabaseUrl.replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || defaultSupabaseAnonKey;
+let realtimeClient: ReturnType<typeof createClient> | null = null;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
@@ -129,6 +132,17 @@ function mapPhotoComment(row: PhotoCommentRow): PhotoComment {
   };
 }
 
+function mapWallNote(row: WallNoteRow): WallNote {
+  const author = row.author.trim();
+  return {
+    id: `wall-${row.id}`,
+    author,
+    avatar: author.slice(0, 1).toUpperCase(),
+    text: row.message.trim(),
+    createdAt: row.created_at,
+  };
+}
+
 export async function createRsvp(form: RsvpPayload) {
   await supabaseFetch<null>("/rest/v1/rsvps", {
     method: "POST",
@@ -172,13 +186,7 @@ export async function listWallNotes() {
 
   const directNotes: WallNote[] =
     directResult.status === "fulfilled"
-      ? directResult.value.map((row) => ({
-          id: `wall-${row.id}`,
-          author: row.author.trim(),
-          avatar: row.author.trim().slice(0, 1).toUpperCase(),
-          text: row.message.trim(),
-          createdAt: row.created_at,
-        }))
+      ? directResult.value.map(mapWallNote)
       : [];
 
   return [...rsvpNotes, ...directNotes].sort((a, b) =>
@@ -194,13 +202,39 @@ export async function createWallNote(author: string, message: string) {
   });
   if (!rows[0]) throw new Error("Wall note was not saved.");
 
-  return {
-    id: `wall-${rows[0].id}`,
-    author: rows[0].author.trim(),
-    avatar: rows[0].author.trim().slice(0, 1).toUpperCase(),
-    text: rows[0].message.trim(),
-    createdAt: rows[0].created_at,
-  } satisfies WallNote;
+  return mapWallNote(rows[0]);
+}
+
+export function subscribeToWallNotes(
+  onInsert: (note: WallNote) => void,
+  onStatus?: (status: string) => void,
+) {
+  if (!isSupabaseConfigured || typeof window === "undefined") return () => {};
+
+  realtimeClient ??= createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+
+  const channel = realtimeClient
+    .channel(`wall-notes-${crypto.randomUUID()}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "wall_notes" },
+      (payload) => {
+        const row = payload.new as WallNoteRow;
+        if (!row.id || !row.author?.trim() || !row.message?.trim() || !row.created_at) return;
+        onInsert(mapWallNote(row));
+      },
+    )
+    .subscribe((status) => onStatus?.(status));
+
+  return () => {
+    void realtimeClient?.removeChannel(channel);
+  };
 }
 
 export async function listPhotos() {
