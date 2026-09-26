@@ -888,7 +888,7 @@ export default function HomeClient({
                           animationDelay: `${index * -4}s`,
                         } as React.CSSProperties}
                       >
-                        {comment.author}：{comment.body}
+                        {comment.body}
                       </span>
                     ))}
                   </div>
