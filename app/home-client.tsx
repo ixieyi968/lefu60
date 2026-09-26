@@ -23,7 +23,6 @@ import {
   listPhotoComments,
   listPhotos,
   listWallNotes,
-  uploadPhoto,
 } from "@/lib/supabase-client";
 import type { PhotoComment, PhotoData, RsvpPayload, WallNote } from "@/lib/supabase-client";
 import { PhotoCard, PhotoModalActions } from "@/components/photo-card";
@@ -319,13 +318,25 @@ export default function HomeClient({
     setPhotoMessage("");
 
     try {
-      if (!isSupabaseConfigured) {
-        throw new Error("Supabase is not configured.");
+      const uploadData = new FormData();
+      pendingPhotoFiles.forEach((file) => uploadData.append("photos", file));
+      uploadData.set("caption", caption);
+      uploadData.set("uploaderName", uploaderName);
+
+      const response = await fetch("/api/photos", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: uploadData,
+      });
+      const result = (await response.json().catch(() => null)) as {
+        photos?: PhotoData[];
+        error?: string;
+      } | null;
+      if (!response.ok || !result?.photos?.length) {
+        throw new Error(result?.error || "照片上传失败，请稍后再试一次。");
       }
 
-      const uploadedPhotos = await Promise.all(
-        pendingPhotoFiles.map((file) => uploadPhoto(file, caption, uploaderName)),
-      );
+      const uploadedPhotos = result.photos;
 
       const nextPhotos = uploadedPhotos.map((photo, index) => ({
         ...photo,
@@ -337,7 +348,11 @@ export default function HomeClient({
       closePhotoCaption();
     } catch (error) {
       console.warn("Photo upload failed", error);
-      setPhotoMessage("照片上传失败，请稍后再试一次。");
+      setPhotoMessage(
+        error instanceof Error && error.message.startsWith("照片")
+          ? error.message
+          : "照片上传失败，请稍后再试一次。",
+      );
     } finally {
       setIsUploadingPhotos(false);
     }
