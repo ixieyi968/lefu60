@@ -273,6 +273,7 @@ export async function uploadPhoto(file: File, caption: string, uploaderName: str
     method: "POST",
     headers: headers({
       "Content-Type": file.type || "application/octet-stream",
+      "cache-control": "31536000",
       "x-upsert": "false",
     }),
     body: file,

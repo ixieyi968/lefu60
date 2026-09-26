@@ -139,7 +139,14 @@ export function PhotoCard({
         <span className="block aspect-[4/3] overflow-hidden rounded-[2px] bg-[#eef0ec]">
           {/* Supabase image hosts are configured at runtime, so this cannot use next/image. */}
           {/* oxlint-disable-next-line next/no-img-element */}
-          <img src={photo.src} alt={photo.name} className="h-full w-full object-cover" />
+          <img
+            src={photo.src}
+            alt={photo.name}
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
+            className="h-full w-full object-cover"
+          />
         </span>
       </button>
 

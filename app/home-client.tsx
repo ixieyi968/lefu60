@@ -44,6 +44,8 @@ type LoadedPhoto = PhotoData & {
 };
 
 const photoRotations = ["rotate-[-2deg]", "rotate-[1.5deg]", "rotate-[-1deg]", "rotate-[2deg]"];
+const photoCompressionThreshold = 500_000;
+const photoMaxDimension = 1920;
 
 const eventDate = new Date("2026-09-26T14:00:00+08:00");
 
@@ -79,6 +81,52 @@ function getTimeLeft() {
     minutes: Math.floor((diff / 60_000) % 60),
     seconds: Math.floor((diff / 1_000) % 60),
   };
+}
+
+function shouldLoadCarouselPhoto(index: number, currentIndex: number, total: number) {
+  const distance = Math.abs(index - currentIndex);
+  return Math.min(distance, total - distance) <= 1;
+}
+
+async function compressPhoto(file: File) {
+  if (
+    file.size < photoCompressionThreshold ||
+    !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+    typeof createImageBitmap !== "function"
+  ) {
+    return file;
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, photoMaxDimension / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      bitmap.close();
+      return file;
+    }
+
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/webp", 0.82),
+    );
+    if (!blob || blob.size >= file.size) return file;
+
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
+    return new File([blob], `${baseName}.webp`, {
+      type: "image/webp",
+      lastModified: file.lastModified,
+    });
+  } catch (error) {
+    console.warn("Photo compression skipped", error);
+    return file;
+  }
 }
 
 type HomeClientProps = {
@@ -319,7 +367,9 @@ export default function HomeClient({
 
     try {
       const uploadData = new FormData();
-      pendingPhotoFiles.forEach((file) => uploadData.append("photos", file));
+      for (const file of pendingPhotoFiles) {
+        uploadData.append("photos", await compressPhoto(file));
+      }
       uploadData.set("caption", caption);
       uploadData.set("uploaderName", uploaderName);
 
@@ -865,7 +915,7 @@ export default function HomeClient({
                 className={isPhotoFullscreen ? "h-screen w-screen" : "mx-auto max-w-5xl"}
               >
                 <CarouselContent className={isPhotoFullscreen ? "-ml-0 h-screen" : "-ml-0"}>
-                  {sortedPhotos.map((photo) => (
+                  {sortedPhotos.map((photo, index) => (
                     <CarouselItem key={`slideshow-${photo.id}`} className={isPhotoFullscreen ? "h-screen pl-0" : "pl-0"}>
                       <figure className={isPhotoFullscreen ? "relative h-screen overflow-hidden bg-black" : "relative overflow-hidden rounded-md border border-[#d9dfd3] bg-[#20251f] shadow-xl shadow-[#41533c]/20"}>
                         <button
@@ -877,11 +927,16 @@ export default function HomeClient({
                           aria-label={`放大查看：${photo.caption}`}
                         >
                           <div className={isPhotoFullscreen ? "flex h-screen w-screen items-center justify-center overflow-hidden" : "flex aspect-[4/3] items-center justify-center overflow-hidden sm:aspect-[16/9]"}>
-                            <img
-                              src={photo.src}
-                              alt={photo.name}
-                              className="h-full w-full object-contain"
-                            />
+                            {shouldLoadCarouselPhoto(index, currentSlide, sortedPhotos.length) && (
+                              <img
+                                src={photo.src}
+                                alt={photo.name}
+                                loading={index === currentSlide ? "eager" : "lazy"}
+                                decoding="async"
+                                fetchPriority={index === currentSlide ? "high" : "low"}
+                                className="h-full w-full object-contain"
+                              />
+                            )}
                           </div>
                           <figcaption className={isPhotoFullscreen ? "absolute inset-x-0 bottom-0 bg-black/72 px-8 py-5 pr-32 font-serif text-3xl font-bold leading-tight text-white backdrop-blur-sm" : "absolute inset-x-0 bottom-0 bg-[#17202b]/88 px-4 py-3 pr-20 font-serif text-base font-bold leading-6 text-white backdrop-blur-sm sm:px-6 sm:py-4 sm:pr-24 sm:text-xl sm:leading-7"}>
                             {photo.caption}
