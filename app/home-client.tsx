@@ -1150,20 +1150,54 @@ export default function HomeClient({
 
       <div
         ref={wallStageRef}
-        className={`fixed inset-0 flex h-screen w-screen flex-col overflow-hidden bg-[#c7383d] text-[#3b2924] transition-opacity ${isWallStageOpen ? "z-[100] opacity-100" : "pointer-events-none -z-50 opacity-0"}`}
+        className={`fixed inset-0 h-screen w-screen overflow-hidden bg-[#8b1720] text-[#3b2924] transition-opacity ${isWallStageOpen ? "z-[100] opacity-100" : "pointer-events-none -z-50 opacity-0"}`}
         aria-hidden={!isWallStageOpen}
         inert={!isWallStageOpen}
       >
-        <header className="relative z-20 flex shrink-0 items-center justify-between border-b-4 border-[#a8242d] bg-[#f7e8c3] px-5 py-4 shadow-lg sm:px-8">
-          <div>
-            <p className="text-xs font-semibold text-[#a8242d]">乐福正当时</p>
-            <h2 className="mt-1 font-serif text-2xl font-bold text-[#3b2924] sm:text-3xl">留言板</h2>
+        {/* oxlint-disable-next-line next/no-img-element */}
+        <img
+          src="/wall-stage-rays.png"
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
+        <div className="absolute inset-0 bg-[#71151c]/16" aria-hidden="true" />
+
+        <div className="absolute inset-[clamp(8px,2.2vw,34px)] z-10 grid min-h-0 grid-cols-[minmax(0,1fr)_clamp(112px,16vw,240px)] overflow-hidden border-2 border-[#e0b66f] bg-[#891b24]/92 shadow-2xl shadow-[#4b0b11]/45">
+          <div className="min-h-0 overflow-hidden border-r border-[#d8a95f]/70 px-3 py-4 sm:px-[clamp(24px,4vw,64px)] sm:py-7">
+            {stageWallNotes.length ? (
+              <div
+                className={`${wallNotes.length > 1 ? "guest-stage-track" : ""} flex flex-col gap-3 sm:gap-4 ${isWallStagePaused ? "is-paused" : ""}`}
+                style={{
+                  "--guest-stage-duration": `${Math.max(48, wallNotes.length * 4)}s`,
+                } as React.CSSProperties}
+              >
+                {stageWallNotes.map((note, index) => (
+                  <blockquote
+                    key={`stage-${note.id}-${index}`}
+                    className="flex min-h-20 items-center gap-3 rounded-[3px] border border-[#d2a35d] bg-[#fff0c9]/96 px-3 py-3 shadow-[0_6px_18px_rgba(67,8,13,0.24)] sm:min-h-28 sm:gap-6 sm:border-2 sm:px-7 sm:py-5"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#c8333d] font-serif text-base font-bold text-[#fff1cf] ring-2 ring-[#e2bc76] sm:h-16 sm:w-16 sm:text-2xl sm:ring-4">
+                      {note.avatar}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-[#ad202c] sm:text-xl">{note.author}</span>
+                      <span className="mt-1 block break-words font-serif text-base leading-relaxed text-[#402724] sm:mt-2 sm:text-3xl">“{note.text}”</span>
+                    </span>
+                  </blockquote>
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center px-4 text-center font-serif text-xl text-[#ffedc0] sm:text-3xl">还没有留言，期待第一句话。</div>
+            )}
           </div>
-          <div className="flex gap-2">
+
+          <aside className="relative flex min-h-0 flex-col items-center justify-between bg-[#68131a]/72 px-2 py-3 sm:px-4 sm:py-5" aria-label="留言大屏控制区">
+            <div className="grid grid-cols-1 gap-2 self-end sm:grid-cols-3">
             <button
               type="button"
               onClick={() => setIsWallStagePaused((paused) => !paused)}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[#c99f62] bg-[#fff4d6] text-[#a8242d] hover:bg-white"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[3px] border border-[#e1b56e] bg-[#5b0d14]/82 text-[#ffedc0] shadow-md transition hover:bg-[#a8242d] sm:h-11 sm:w-11"
               aria-label={isWallStagePaused ? "继续播放留言" : "暂停留言播放"}
               title={isWallStagePaused ? "继续播放" : "暂停播放"}
             >
@@ -1172,7 +1206,7 @@ export default function HomeClient({
             <button
               type="button"
               onClick={toggleWallStageFullscreen}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[#c99f62] bg-[#fff4d6] text-[#a8242d] hover:bg-white"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[3px] border border-[#e1b56e] bg-[#5b0d14]/82 text-[#ffedc0] shadow-md transition hover:bg-[#a8242d] sm:h-11 sm:w-11"
               aria-label={isWallStageFullscreen ? "退出浏览器全屏" : "进入浏览器全屏"}
               title={isWallStageFullscreen ? "退出全屏" : "进入全屏"}
             >
@@ -1181,40 +1215,26 @@ export default function HomeClient({
             <button
               type="button"
               onClick={closeWallStage}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-[#c99f62] bg-[#fff4d6] text-[#a8242d] hover:bg-white"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[3px] border border-[#e1b56e] bg-[#5b0d14]/82 text-[#ffedc0] shadow-md transition hover:bg-[#a8242d] sm:h-11 sm:w-11"
               aria-label="关闭留言大屏"
               title="关闭"
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
-          </div>
-        </header>
-        <div className="min-h-0 flex-1 overflow-hidden border-x-[clamp(10px,3vw,48px)] border-[#a8242d] bg-[#f4dca9] px-5 py-6 sm:px-[6vw] sm:py-8">
-          {stageWallNotes.length ? (
-            <div
-              className={`${wallNotes.length > 1 ? "guest-stage-track" : ""} flex flex-col gap-4 ${isWallStagePaused ? "is-paused" : ""}`}
-              style={{
-                "--guest-stage-duration": `${Math.max(48, wallNotes.length * 4)}s`,
-              } as React.CSSProperties}
-            >
-              {stageWallNotes.map((note, index) => (
-                <blockquote
-                  key={`stage-${note.id}-${index}`}
-                  className="flex min-h-28 items-center gap-5 rounded-md border-2 border-[#d3ad6f] bg-[#fff1cf] px-5 py-5 shadow-lg shadow-[#8e2028]/15 sm:min-h-32 sm:gap-7 sm:px-8"
-                >
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#c7383d] font-serif text-xl font-bold text-[#fff1cf] ring-4 ring-[#e1bd7e] sm:h-16 sm:w-16 sm:text-2xl">
-                    {note.avatar}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-base font-semibold text-[#a8242d] sm:text-xl">{note.author}</span>
-                    <span className="mt-2 block break-words font-serif text-xl leading-relaxed text-[#3b2924] sm:text-3xl">“{note.text}”</span>
-                  </span>
-                </blockquote>
-              ))}
             </div>
-          ) : (
-            <div className="flex h-full items-center justify-center text-center font-serif text-3xl text-[#7b312e]">还没有留言，期待第一句话。</div>
-          )}
+
+            <div className="w-full max-w-[210px] border-2 border-[#ddb166] bg-[#f8e4b5] p-1.5 shadow-[0_8px_24px_rgba(52,5,10,0.38)] sm:p-2.5">
+              {/* oxlint-disable-next-line next/no-img-element */}
+              <img
+                src="/wall-stage-qr.png"
+                alt="扫码进入网页留言"
+                className="aspect-square w-full bg-[#f8e4b5] object-contain"
+              />
+              <p className="border-t border-[#c98f49] pt-1.5 text-center font-serif text-[10px] font-bold leading-tight text-[#9d1f29] sm:pt-2 sm:text-sm">
+                扫码留言上墙
+              </p>
+            </div>
+          </aside>
         </div>
       </div>
 
