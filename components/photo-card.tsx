@@ -47,7 +47,7 @@ export function PhotoCard({
 }: PhotoCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [captionDraft, setCaptionDraft] = useState(photo.caption);
-  const [authorDraft, setAuthorDraft] = useState(defaultAuthor);
+  const [authorDraft, setAuthorDraft] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [isSavingCaption, setIsSavingCaption] = useState(false);
   const [isSavingPin, setIsSavingPin] = useState(false);
@@ -94,7 +94,7 @@ export function PhotoCard({
 
   async function submitComment(event: { preventDefault: () => void }) {
     event.preventDefault();
-    const author = (defaultAuthor || authorDraft).trim();
+    const author = (authorDraft ?? defaultAuthor).trim();
     const body = commentDraft.trim();
     if (!author) {
       setStatus("请先填写署名。");
@@ -208,9 +208,7 @@ export function PhotoCard({
               </div>
             )}
             <form onSubmit={submitComment} className="mt-3 grid gap-2">
-              {!defaultAuthor.trim() && (
-                <input value={authorDraft} onChange={(event) => setAuthorDraft(event.target.value)} maxLength={40} placeholder="你的署名" aria-label="评论署名" className="h-9 w-full rounded-md border border-[#cbd4c6] px-3 text-sm outline-none focus:border-[#6b7f5f]" />
-              )}
+              <input value={authorDraft ?? defaultAuthor} onChange={(event) => setAuthorDraft(event.target.value)} maxLength={40} placeholder="你的署名" aria-label="评论署名" className="h-9 w-full rounded-md border border-[#cbd4c6] px-3 text-sm outline-none focus:border-[#6b7f5f]" />
               <textarea value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} maxLength={500} rows={3} placeholder="写下评论" aria-label="评论内容" className="w-full resize-y rounded-md border border-[#cbd4c6] px-3 py-2 text-sm outline-none focus:border-[#6b7f5f]" />
               <button type="submit" disabled={isSavingComment} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-[#5f7657] px-3 text-sm font-semibold text-white disabled:opacity-60">
                 <Send className="h-4 w-4" aria-hidden="true" />{isSavingComment ? "发布中" : "发布评论"}
@@ -233,7 +231,7 @@ export function PhotoModalActions({
 }: PhotoModalActionsProps) {
   const [activePanel, setActivePanel] = useState<"caption" | "comments" | null>(null);
   const [captionDraft, setCaptionDraft] = useState(photo.caption);
-  const [authorDraft, setAuthorDraft] = useState(defaultAuthor);
+  const [authorDraft, setAuthorDraft] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState("");
@@ -263,7 +261,7 @@ export function PhotoModalActions({
 
   async function submitComment(event: { preventDefault: () => void }) {
     event.preventDefault();
-    const author = (defaultAuthor || authorDraft).trim();
+    const author = (authorDraft ?? defaultAuthor).trim();
     const body = commentDraft.trim();
     if (!author || !body) {
       setStatus("请填写署名和评论内容。");
@@ -341,16 +339,14 @@ export function PhotoModalActions({
             )) : <p className="text-sm text-[#6b7f5f]">还没有评论。</p>}
           </div>
           <form onSubmit={submitComment} className="grid gap-2">
-            {!defaultAuthor.trim() && (
-              <input
-                value={authorDraft}
-                onChange={(event) => setAuthorDraft(event.target.value)}
-                maxLength={40}
-                placeholder="你的署名"
-                aria-label="评论署名"
-                className="h-9 rounded-md border border-[#cbd4c6] px-3 text-sm outline-none focus:border-[#6b7f5f]"
-              />
-            )}
+            <input
+              value={authorDraft ?? defaultAuthor}
+              onChange={(event) => setAuthorDraft(event.target.value)}
+              maxLength={40}
+              placeholder="你的署名"
+              aria-label="评论署名"
+              className="h-9 rounded-md border border-[#cbd4c6] px-3 text-sm outline-none focus:border-[#6b7f5f]"
+            />
             <textarea
               value={commentDraft}
               onChange={(event) => setCommentDraft(event.target.value)}
