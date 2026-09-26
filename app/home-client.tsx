@@ -3,23 +3,29 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
+  Expand,
   Mail,
   MapPin,
+  MessageSquarePlus,
+  Minimize,
   Music2,
   PartyPopper,
+  Pause,
+  Play,
   Send,
   Volume2,
   VolumeX,
   X,
 } from "lucide-react";
 import {
+  createWallNote,
   isSupabaseConfigured,
   listPhotoComments,
   listPhotos,
   listWallNotes,
   uploadPhoto,
 } from "@/lib/supabase-client";
-import type { PhotoComment, PhotoData, RsvpPayload } from "@/lib/supabase-client";
+import type { PhotoComment, PhotoData, RsvpPayload, WallNote } from "@/lib/supabase-client";
 import { PhotoCard } from "@/components/photo-card";
 import {
   Carousel,
@@ -33,13 +39,6 @@ import {
 type Rsvp = RsvpPayload;
 
 type Photo = PhotoData & { rotation: string };
-
-type WallNote = {
-  id: string;
-  author: string;
-  avatar: string;
-  text: string;
-};
 
 type LoadedPhoto = PhotoData & {
   rotation?: string;
@@ -107,6 +106,8 @@ export default function HomeClient({
 }: HomeClientProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const photoSlideshowRef = useRef<HTMLDivElement | null>(null);
+  const wallStageRef = useRef<HTMLDivElement | null>(null);
   const lastPhotoTapRef = useRef<{ id: string; at: number } | null>(null);
   const [showGlassesTip, setShowGlassesTip] = useState(false);
   const rsvpMessage =
@@ -142,6 +143,14 @@ export default function HomeClient({
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const [isPhotoFullscreen, setIsPhotoFullscreen] = useState(false);
+  const [isWallStageOpen, setIsWallStageOpen] = useState(false);
+  const [isWallStageFullscreen, setIsWallStageFullscreen] = useState(false);
+  const [isWallStagePaused, setIsWallStagePaused] = useState(false);
+  const [isWallComposerOpen, setIsWallComposerOpen] = useState(false);
+  const [isSavingWallNote, setIsSavingWallNote] = useState(false);
+  const [wallNoteStatus, setWallNoteStatus] = useState("");
+  const [wallNoteDraft, setWallNoteDraft] = useState({ author: "", message: "" });
   const [timeLeft, setTimeLeft] = useState(initialTimeLeft);
   const [form, setForm] = useState<Rsvp>({
     name: "",
@@ -159,6 +168,7 @@ export default function HomeClient({
   }, [photoComments]);
   const selectedPhoto = photos.find((photo) => photo.id === selectedPhotoId) ?? null;
   const rollingWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
+  const stageWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
   const photoOrderKey = sortedPhotos.map((photo) => photo.id).join("|");
 
   useEffect(() => {
@@ -210,6 +220,16 @@ export default function HomeClient({
       document.documentElement.classList.remove("js-ready");
       window.clearInterval(timer);
     };
+  }, []);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsPhotoFullscreen(document.fullscreenElement === photoSlideshowRef.current);
+      setIsWallStageFullscreen(document.fullscreenElement === wallStageRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
   }, []);
 
   useEffect(() => {
@@ -339,6 +359,78 @@ export default function HomeClient({
         photo.id === updated.id ? { ...updated, rotation: photo.rotation } : photo,
       ),
     );
+  }
+
+  async function togglePhotoFullscreen() {
+    try {
+      if (document.fullscreenElement === photoSlideshowRef.current) {
+        await document.exitFullscreen();
+      } else {
+        await photoSlideshowRef.current?.requestFullscreen();
+        setIsCarouselPaused(false);
+      }
+    } catch (error) {
+      console.warn("Photo fullscreen failed", error);
+    }
+  }
+
+  async function openWallStage() {
+    setIsWallStageOpen(true);
+    setIsWallStagePaused(false);
+    try {
+      await wallStageRef.current?.requestFullscreen();
+    } catch (error) {
+      console.warn("Wall fullscreen failed", error);
+    }
+  }
+
+  async function closeWallStage() {
+    if (document.fullscreenElement === wallStageRef.current) {
+      await document.exitFullscreen().catch(() => undefined);
+    }
+    setIsWallStageOpen(false);
+  }
+
+  async function toggleWallStageFullscreen() {
+    try {
+      if (document.fullscreenElement === wallStageRef.current) {
+        await document.exitFullscreen();
+      } else {
+        await wallStageRef.current?.requestFullscreen();
+      }
+    } catch (error) {
+      console.warn("Wall fullscreen failed", error);
+    }
+  }
+
+  function openWallComposer() {
+    setWallNoteDraft((current) => ({ ...current, author: current.author || form.name }));
+    setWallNoteStatus("");
+    setIsWallComposerOpen(true);
+  }
+
+  async function submitWallNote(event: { preventDefault: () => void }) {
+    event.preventDefault();
+    const author = wallNoteDraft.author.trim();
+    const message = wallNoteDraft.message.trim();
+    if (!author || !message) {
+      setWallNoteStatus("请填写署名和留言内容。");
+      return;
+    }
+
+    setIsSavingWallNote(true);
+    setWallNoteStatus("");
+    try {
+      const note = await createWallNote(author, message);
+      setWallNotes((current) => [note, ...current]);
+      setWallNoteDraft({ author, message: "" });
+      setWallNoteStatus("留言已发布。");
+    } catch (error) {
+      console.warn("Wall note submission failed", error);
+      setWallNoteStatus("留言发布失败，内容已保留，请稍后再试。");
+    } finally {
+      setIsSavingWallNote(false);
+    }
   }
 
   function openInvitation() {
@@ -722,10 +814,13 @@ export default function HomeClient({
           </div>
           {sortedPhotos.length > 0 && (
             <div
-              className="mt-8 sm:mt-10"
+              ref={photoSlideshowRef}
+              className={isPhotoFullscreen ? "relative flex h-screen w-screen items-center bg-black" : "relative mt-8 sm:mt-10"}
               onMouseEnter={() => setIsCarouselPaused(true)}
               onMouseLeave={() => setIsCarouselPaused(false)}
-              onFocusCapture={() => setIsCarouselPaused(true)}
+              onFocusCapture={() => {
+                if (!isPhotoFullscreen) setIsCarouselPaused(true);
+              }}
               onBlurCapture={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
                   setIsCarouselPaused(false);
@@ -736,26 +831,28 @@ export default function HomeClient({
                 setApi={setCarouselApi}
                 opts={{ loop: true }}
                 aria-label="照片滚动放映墙"
-                className="mx-auto max-w-5xl"
+                className={isPhotoFullscreen ? "h-screen w-screen" : "mx-auto max-w-5xl"}
               >
-                <CarouselContent className="-ml-0">
+                <CarouselContent className={isPhotoFullscreen ? "-ml-0 h-screen" : "-ml-0"}>
                   {sortedPhotos.map((photo) => (
-                    <CarouselItem key={`slideshow-${photo.id}`} className="pl-0">
-                      <figure className="relative overflow-hidden rounded-md border border-[#d9dfd3] bg-[#20251f] shadow-xl shadow-[#41533c]/20">
+                    <CarouselItem key={`slideshow-${photo.id}`} className={isPhotoFullscreen ? "h-screen pl-0" : "pl-0"}>
+                      <figure className={isPhotoFullscreen ? "relative h-screen overflow-hidden bg-black" : "relative overflow-hidden rounded-md border border-[#d9dfd3] bg-[#20251f] shadow-xl shadow-[#41533c]/20"}>
                         <button
                           type="button"
-                          onClick={() => setSelectedPhotoId(photo.id)}
-                          className="block w-full text-left focus:outline-none focus:ring-4 focus:ring-inset focus:ring-[#f3dfad]/60"
+                          onClick={() => {
+                            if (!isPhotoFullscreen) setSelectedPhotoId(photo.id);
+                          }}
+                          className={isPhotoFullscreen ? "block h-full w-full text-left focus:outline-none" : "block w-full text-left focus:outline-none focus:ring-4 focus:ring-inset focus:ring-[#f3dfad]/60"}
                           aria-label={`放大查看：${photo.caption}`}
                         >
-                          <div className="flex aspect-[4/3] items-center justify-center overflow-hidden sm:aspect-[16/9]">
+                          <div className={isPhotoFullscreen ? "flex h-screen w-screen items-center justify-center overflow-hidden" : "flex aspect-[4/3] items-center justify-center overflow-hidden sm:aspect-[16/9]"}>
                             <img
                               src={photo.src}
                               alt={photo.name}
                               className="h-full w-full object-contain"
                             />
                           </div>
-                          <figcaption className="absolute inset-x-0 bottom-0 bg-[#17202b]/88 px-4 py-3 pr-20 font-serif text-base font-bold leading-6 text-white backdrop-blur-sm sm:px-6 sm:py-4 sm:pr-24 sm:text-xl sm:leading-7">
+                          <figcaption className={isPhotoFullscreen ? "absolute inset-x-0 bottom-0 bg-black/72 px-8 py-5 pr-32 font-serif text-3xl font-bold leading-tight text-white backdrop-blur-sm" : "absolute inset-x-0 bottom-0 bg-[#17202b]/88 px-4 py-3 pr-20 font-serif text-base font-bold leading-6 text-white backdrop-blur-sm sm:px-6 sm:py-4 sm:pr-24 sm:text-xl sm:leading-7"}>
                             {photo.caption}
                           </figcaption>
                         </button>
@@ -763,6 +860,15 @@ export default function HomeClient({
                     </CarouselItem>
                   ))}
                 </CarouselContent>
+                <button
+                  type="button"
+                  onClick={togglePhotoFullscreen}
+                  className="absolute right-3 top-3 z-20 inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/70 bg-black/60 text-white backdrop-blur-sm transition hover:bg-black/80 focus:outline-none focus:ring-4 focus:ring-white/30 sm:right-4 sm:top-4"
+                  aria-label={isPhotoFullscreen ? "退出照片全屏" : "照片全屏播放"}
+                  title={isPhotoFullscreen ? "退出全屏" : "全屏播放"}
+                >
+                  {isPhotoFullscreen ? <Minimize className="h-5 w-5" aria-hidden="true" /> : <Expand className="h-5 w-5" aria-hidden="true" />}
+                </button>
                 {sortedPhotos.length > 1 && (
                   <>
                     <CarouselPrevious
@@ -852,6 +958,12 @@ export default function HomeClient({
           .guest-roll-track:hover {
             animation-play-state: paused;
           }
+          .guest-stage-track {
+            animation: guest-roll var(--guest-stage-duration, 60s) linear infinite;
+          }
+          .guest-stage-track.is-paused {
+            animation-play-state: paused;
+          }
           .guest-wall-modal {
             display: none;
           }
@@ -862,8 +974,30 @@ export default function HomeClient({
             display: none;
           }
         `}</style>
-        <p className="mb-3 text-sm font-semibold text-[#7f6344]">留言墙</p>
-        <h2 className="font-serif text-3xl font-bold sm:text-4xl">先说两句，见面再聊。</h2>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-3 text-sm font-semibold text-[#7f6344]">留言墙</p>
+            <h2 className="font-serif text-3xl font-bold sm:text-4xl">先说两句，见面再聊。</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openWallComposer}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#5f7657] px-4 text-sm font-semibold text-white transition hover:bg-[#4d6447]"
+            >
+              <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+              我要留言
+            </button>
+            <button
+              type="button"
+              onClick={openWallStage}
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-[#cbd4c6] bg-white px-4 text-sm font-semibold text-[#40513b] transition hover:bg-[#eef3e9]"
+            >
+              <Expand className="h-4 w-4" aria-hidden="true" />
+              大屏播放
+            </button>
+          </div>
+        </div>
         <a
           href="#wall-all"
           className="mt-5 block h-48 cursor-pointer overflow-hidden border-y border-[#d8ddd3] bg-[#f8f7f2] py-3 transition hover:bg-white/65 sm:mt-7 sm:h-52"
@@ -900,6 +1034,121 @@ export default function HomeClient({
           )}
         </a>
       </section>
+
+      <div
+        ref={wallStageRef}
+        className={`fixed inset-0 flex h-screen w-screen flex-col overflow-hidden bg-[#17202b] text-white transition-opacity ${isWallStageOpen ? "z-[100] opacity-100" : "pointer-events-none -z-50 opacity-0"}`}
+        aria-hidden={!isWallStageOpen}
+        inert={!isWallStageOpen}
+      >
+        <header className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/15 bg-[#17202b]/92 px-5 py-4 backdrop-blur-sm sm:px-8">
+          <div>
+            <p className="text-xs font-semibold text-[#f3dfad]">乐福老师 60 岁生日会</p>
+            <h2 className="mt-1 font-serif text-2xl font-bold sm:text-3xl">来宾留言</h2>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsWallStagePaused((paused) => !paused)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/30 bg-white/10 text-white hover:bg-white/20"
+              aria-label={isWallStagePaused ? "继续播放留言" : "暂停留言播放"}
+              title={isWallStagePaused ? "继续播放" : "暂停播放"}
+            >
+              {isWallStagePaused ? <Play className="h-5 w-5" aria-hidden="true" /> : <Pause className="h-5 w-5" aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              onClick={toggleWallStageFullscreen}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/30 bg-white/10 text-white hover:bg-white/20"
+              aria-label={isWallStageFullscreen ? "退出浏览器全屏" : "进入浏览器全屏"}
+              title={isWallStageFullscreen ? "退出全屏" : "进入全屏"}
+            >
+              {isWallStageFullscreen ? <Minimize className="h-5 w-5" aria-hidden="true" /> : <Expand className="h-5 w-5" aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              onClick={closeWallStage}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-white/30 bg-white/10 text-white hover:bg-white/20"
+              aria-label="关闭留言大屏"
+              title="关闭"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 overflow-hidden px-5 py-6 sm:px-[8vw] sm:py-8">
+          {stageWallNotes.length ? (
+            <div
+              className={`${wallNotes.length > 1 ? "guest-stage-track" : ""} flex flex-col gap-4 ${isWallStagePaused ? "is-paused" : ""}`}
+              style={{
+                "--guest-stage-duration": `${Math.max(48, wallNotes.length * 4)}s`,
+              } as React.CSSProperties}
+            >
+              {stageWallNotes.map((note, index) => (
+                <blockquote
+                  key={`stage-${note.id}-${index}`}
+                  className="flex min-h-28 items-center gap-5 rounded-md border border-white/15 bg-white/10 px-5 py-5 shadow-lg backdrop-blur-sm sm:min-h-32 sm:gap-7 sm:px-8"
+                >
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#f3dfad] font-serif text-xl font-bold text-[#40513b] sm:h-16 sm:w-16 sm:text-2xl">
+                    {note.avatar}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-base font-semibold text-[#f3dfad] sm:text-xl">{note.author}</span>
+                    <span className="mt-2 block break-words font-serif text-xl leading-relaxed sm:text-3xl">“{note.text}”</span>
+                  </span>
+                </blockquote>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center text-center font-serif text-3xl text-white/70">还没有留言，期待第一句话。</div>
+          )}
+        </div>
+      </div>
+
+      {isWallComposerOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#20251f]/60 px-4 py-6 backdrop-blur-sm">
+          <form onSubmit={submitWallNote} className="w-full max-w-lg rounded-md bg-white p-5 shadow-2xl shadow-black/25 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-[#7f6344]">留言墙</p>
+                <h2 className="mt-1 font-serif text-2xl font-bold text-[#20251f]">写下你的留言</h2>
+              </div>
+              <button type="button" onClick={() => setIsWallComposerOpen(false)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#d8ddd3] text-[#40513b] hover:bg-[#eef3e9]" aria-label="关闭留言窗口">
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <label className="mt-5 block text-sm font-semibold" htmlFor="wall-note-author">署名</label>
+            <input
+              id="wall-note-author"
+              value={wallNoteDraft.author}
+              onChange={(event) => setWallNoteDraft({ ...wallNoteDraft, author: event.target.value })}
+              maxLength={40}
+              required
+              className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] px-3 outline-none focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+              placeholder="请输入你的名字"
+            />
+            <label className="mt-4 block text-sm font-semibold" htmlFor="wall-note-message">留言内容</label>
+            <textarea
+              id="wall-note-message"
+              value={wallNoteDraft.message}
+              onChange={(event) => setWallNoteDraft({ ...wallNoteDraft, message: event.target.value })}
+              maxLength={500}
+              required
+              rows={5}
+              className="mt-2 w-full resize-y rounded-md border border-[#cbd4c6] px-3 py-2 outline-none focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
+              placeholder="想对老师或大家说些什么？"
+            />
+            <div className="mt-2 flex items-center justify-between gap-3 text-xs text-[#6b7f5f]">
+              <span>{wallNoteStatus}</span>
+              <span>{wallNoteDraft.message.length}/500</span>
+            </div>
+            <button type="submit" disabled={isSavingWallNote} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[#5f7657] px-4 font-semibold text-white hover:bg-[#4d6447] disabled:opacity-60">
+              <Send className="h-4 w-4" aria-hidden="true" />
+              {isSavingWallNote ? "正在发布..." : "发布留言"}
+            </button>
+          </form>
+        </div>
+      )}
 
       <div id="wall-all" className="guest-wall-modal fixed inset-0 z-[70] items-center justify-center bg-[#20251f]/55 px-4 py-6 backdrop-blur-sm">
           <section className="relative flex h-[66vh] w-full max-w-4xl flex-col rounded-md bg-[#f8f7f2] shadow-2xl shadow-black/25">

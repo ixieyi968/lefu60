@@ -23,6 +23,14 @@ export type PhotoComment = {
   createdAt: string;
 };
 
+export type WallNote = {
+  id: string;
+  author: string;
+  avatar: string;
+  text: string;
+  createdAt: string;
+};
+
 type PhotoRow = {
   id: string;
   image_url: string;
@@ -44,6 +52,14 @@ type RsvpRow = {
   id: string | number;
   name: string | null;
   message: string | null;
+  created_at: string;
+};
+
+type WallNoteRow = {
+  id: string;
+  author: string;
+  message: string;
+  created_at: string;
 };
 
 const defaultSupabaseUrl = "https://rsumjaaancigotgulpkc.supabase.co/rest/v1/";
@@ -128,10 +144,20 @@ export async function createRsvp(form: RsvpPayload) {
 }
 
 export async function listWallNotes() {
-  const rows = await supabaseFetchAll<RsvpRow>(
-    "/rest/v1/rsvps?select=id,name,message&message=not.is.null&order=created_at.desc",
-  );
-  return rows
+  const [rsvpResult, directResult] = await Promise.allSettled([
+    supabaseFetchAll<RsvpRow>(
+      "/rest/v1/rsvps?select=id,name,message,created_at&message=not.is.null&order=created_at.desc",
+    ),
+    supabaseFetchAll<WallNoteRow>(
+      "/rest/v1/wall_notes?select=id,author,message,created_at&order=created_at.desc",
+    ),
+  ]);
+  if (rsvpResult.status === "rejected") throw rsvpResult.reason;
+  if (directResult.status === "rejected") {
+    console.warn("Direct wall notes are not available yet", directResult.reason);
+  }
+
+  const rsvpNotes: WallNote[] = rsvpResult.value
     .map((row) => {
       const author = row.name?.trim() || "一位同门";
       return {
@@ -139,9 +165,42 @@ export async function listWallNotes() {
         author,
         avatar: author.slice(0, 1).toUpperCase(),
         text: row.message?.trim() || "",
+        createdAt: row.created_at,
       };
     })
     .filter((note) => note.text);
+
+  const directNotes: WallNote[] =
+    directResult.status === "fulfilled"
+      ? directResult.value.map((row) => ({
+          id: `wall-${row.id}`,
+          author: row.author.trim(),
+          avatar: row.author.trim().slice(0, 1).toUpperCase(),
+          text: row.message.trim(),
+          createdAt: row.created_at,
+        }))
+      : [];
+
+  return [...rsvpNotes, ...directNotes].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
+export async function createWallNote(author: string, message: string) {
+  const rows = await supabaseFetch<WallNoteRow[]>("/rest/v1/wall_notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify({ author: author.trim(), message: message.trim() }),
+  });
+  if (!rows[0]) throw new Error("Wall note was not saved.");
+
+  return {
+    id: `wall-${rows[0].id}`,
+    author: rows[0].author.trim(),
+    avatar: rows[0].author.trim().slice(0, 1).toUpperCase(),
+    text: rows[0].message.trim(),
+    createdAt: rows[0].created_at,
+  } satisfies WallNote;
 }
 
 export async function listPhotos() {
