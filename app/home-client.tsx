@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   Mail,
@@ -14,11 +14,13 @@ import {
 } from "lucide-react";
 import {
   isSupabaseConfigured,
+  listPhotoComments,
   listPhotos,
   listWallNotes,
   uploadPhoto,
 } from "@/lib/supabase-client";
-import type { RsvpPayload } from "@/lib/supabase-client";
+import type { PhotoComment, PhotoData, RsvpPayload } from "@/lib/supabase-client";
+import { PhotoCard } from "@/components/photo-card";
 import {
   Carousel,
   CarouselContent,
@@ -30,14 +32,7 @@ import {
 
 type Rsvp = RsvpPayload;
 
-type Photo = {
-  id: string;
-  src: string;
-  name: string;
-  caption: string;
-  rotation: string;
-  imageClass?: string;
-};
+type Photo = PhotoData & { rotation: string };
 
 type WallNote = {
   id: string;
@@ -46,7 +41,7 @@ type WallNote = {
   text: string;
 };
 
-type LoadedPhoto = Omit<Photo, "rotation"> & {
+type LoadedPhoto = PhotoData & {
   rotation?: string;
 };
 
@@ -59,25 +54,23 @@ const schedule = [
   { time: "18:00", title: "六十寿宴 · 归来仍是少年" },
 ];
 
-const initialPhotos: Photo[] = [
-  {
-    id: "bbq-2025-2",
-    src: "/bbq-2025-2.jpg",
-    name: "浦江郊野公园烧烤趴",
-    caption: "2025 浦江郊野公园烧烤趴",
-    rotation: "rotate-[1deg]",
-    imageClass: "rotate-[-90deg] scale-[1.35]",
-  },
-  {
-    id: "teachers-day-2025",
-    src: "/teachers-day-2025.jpg",
-    name: "2025 教师节合影",
-    caption: "2025 教师节合影",
-    rotation: "rotate-[-1deg]",
-  },
-];
-
 const initialWallNotes: WallNote[] = [];
+
+function comparePhotos(a: PhotoData, b: PhotoData) {
+  if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+
+  const aYear = a.caption.match(/^\s*(\d{4})/)?.[1];
+  const bYear = b.caption.match(/^\s*(\d{4})/)?.[1];
+  if (aYear && bYear && aYear !== bYear) return Number(aYear) - Number(bYear);
+  if (aYear !== bYear) return aYear ? -1 : 1;
+
+  const captionOrder = a.caption.localeCompare(b.caption, "zh-CN", {
+    numeric: true,
+    sensitivity: "base",
+  });
+  if (captionOrder !== 0) return captionOrder;
+  return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+}
 
 function getTimeLeft() {
   const diff = Math.max(eventDate.getTime() - Date.now(), 0);
@@ -93,6 +86,7 @@ function getTimeLeft() {
 type HomeClientProps = {
   initialLoadedPhotos: LoadedPhoto[];
   initialLoadedWallNotes: WallNote[];
+  initialLoadedComments: PhotoComment[];
   initialTimeLeft: {
     days: number;
     hours: number;
@@ -106,6 +100,7 @@ type HomeClientProps = {
 export default function HomeClient({
   initialLoadedPhotos,
   initialLoadedWallNotes,
+  initialLoadedComments,
   initialTimeLeft,
   rsvpStatus,
   photoStatus,
@@ -123,29 +118,25 @@ export default function HomeClient({
   const [isOpened, setIsOpened] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [photos, setPhotos] = useState<Photo[]>(
-    initialLoadedPhotos.length
-      ? [
-          ...initialLoadedPhotos.map((photo, index) => ({
-            ...photo,
-            rotation: photo.rotation ?? photoRotations[index % photoRotations.length],
-          })),
-          ...initialPhotos,
-        ]
-      : initialPhotos,
+    initialLoadedPhotos.map((photo, index) => ({
+      ...photo,
+      rotation: photo.rotation ?? photoRotations[index % photoRotations.length],
+    })),
   );
+  const [photoComments, setPhotoComments] = useState(initialLoadedComments);
   const [wallNotes, setWallNotes] = useState<WallNote[]>(
     initialLoadedWallNotes.length ? initialLoadedWallNotes : initialWallNotes,
   );
   const [isSavingRsvp, setIsSavingRsvp] = useState(false);
   const [photoMessage, setPhotoMessage] = useState(
     photoStatus === "success"
-      ? "照片已上传，大家刷新后都能看见。"
+      ? "照片已上传，可以立即编辑、置顶或评论。"
       : photoStatus === "error"
         ? "照片上传失败，请稍后再试一次。"
         : "",
   );
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
   const [captionDraft, setCaptionDraft] = useState("");
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
@@ -159,8 +150,16 @@ export default function HomeClient({
     contact: "",
     message: "",
   });
+  const sortedPhotos = useMemo(() => [...photos].sort(comparePhotos), [photos]);
+  const commentsByPhotoId = useMemo(() => {
+    return photoComments.reduce<Record<string, PhotoComment[]>>((groups, comment) => {
+      (groups[comment.photoId] ??= []).push(comment);
+      return groups;
+    }, {});
+  }, [photoComments]);
+  const selectedPhoto = photos.find((photo) => photo.id === selectedPhotoId) ?? null;
   const rollingWallNotes = wallNotes.length > 1 ? [...wallNotes, ...wallNotes] : wallNotes;
-  const firstPhotoId = photos[0]?.id;
+  const photoOrderKey = sortedPhotos.map((photo) => photo.id).join("|");
 
   useEffect(() => {
     document.documentElement.classList.add("js-ready");
@@ -183,20 +182,23 @@ export default function HomeClient({
     }
 
     if (isSupabaseConfigured) {
-      Promise.allSettled([listPhotos(), listWallNotes()])
-        .then(([photosResult, notesResult]) => {
-          if (photosResult.status === "fulfilled" && photosResult.value.length) {
-            setPhotos([
-              ...photosResult.value.map((photo, index) => ({
+      Promise.allSettled([listPhotos(), listWallNotes(), listPhotoComments()])
+        .then(([photosResult, notesResult, commentsResult]) => {
+          if (photosResult.status === "fulfilled") {
+            setPhotos(
+              photosResult.value.map((photo, index) => ({
                 ...photo,
                 rotation: photoRotations[index % photoRotations.length],
               })),
-              ...initialPhotos,
-            ]);
+            );
           }
 
           if (notesResult.status === "fulfilled" && notesResult.value.length) {
             setWallNotes(notesResult.value);
+          }
+
+          if (commentsResult.status === "fulfilled") {
+            setPhotoComments(commentsResult.value);
           }
         })
         .catch((error) => {
@@ -227,10 +229,10 @@ export default function HomeClient({
     if (!carouselApi) return;
     carouselApi.reInit();
     carouselApi.scrollTo(0, true);
-  }, [carouselApi, firstPhotoId]);
+  }, [carouselApi, photoOrderKey]);
 
   useEffect(() => {
-    if (!carouselApi || photos.length < 2 || isCarouselPaused) return;
+    if (!carouselApi || sortedPhotos.length < 2 || isCarouselPaused) return;
 
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     let autoplay: number | undefined;
@@ -255,7 +257,7 @@ export default function HomeClient({
       mediaQuery.removeEventListener("change", syncAutoplay);
       document.removeEventListener("visibilitychange", syncAutoplay);
     };
-  }, [carouselApi, photos.length, isCarouselPaused]);
+  }, [carouselApi, sortedPhotos.length, isCarouselPaused]);
 
   function rememberRsvp() {
     setIsSavingRsvp(true);
@@ -307,7 +309,7 @@ export default function HomeClient({
       }));
 
       setPhotos((current) => [...nextPhotos, ...current]);
-      setPhotoMessage("照片已上传，大家刷新后都能看见。");
+      setPhotoMessage("照片已上传，可以立即编辑、置顶或评论。");
       closePhotoCaption();
     } catch (error) {
       console.warn("Photo upload failed", error);
@@ -323,12 +325,20 @@ export default function HomeClient({
 
     if (lastTap?.id === photo.id && now - lastTap.at < 360) {
       event.preventDefault();
-      setSelectedPhoto(photo);
+      setSelectedPhotoId(photo.id);
       lastPhotoTapRef.current = null;
       return;
     }
 
     lastPhotoTapRef.current = { id: photo.id, at: now };
+  }
+
+  function handlePhotoChanged(updated: PhotoData) {
+    setPhotos((current) =>
+      current.map((photo) =>
+        photo.id === updated.id ? { ...updated, rotation: photo.rotation } : photo,
+      ),
+    );
   }
 
   function openInvitation() {
@@ -692,6 +702,7 @@ export default function HomeClient({
               <input
                 id="photo-fallback-caption"
                 name="caption"
+                maxLength={120}
                 className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] bg-white px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
                 placeholder="例如：2025 浦江郊野公园烧烤趴"
               />
@@ -709,7 +720,7 @@ export default function HomeClient({
               </p>
             )}
           </div>
-          {photos.length > 0 && (
+          {sortedPhotos.length > 0 && (
             <div
               className="mt-8 sm:mt-10"
               onMouseEnter={() => setIsCarouselPaused(true)}
@@ -728,12 +739,12 @@ export default function HomeClient({
                 className="mx-auto max-w-5xl"
               >
                 <CarouselContent className="-ml-0">
-                  {photos.map((photo) => (
+                  {sortedPhotos.map((photo) => (
                     <CarouselItem key={`slideshow-${photo.id}`} className="pl-0">
                       <figure className="relative overflow-hidden rounded-md border border-[#d9dfd3] bg-[#20251f] shadow-xl shadow-[#41533c]/20">
                         <button
                           type="button"
-                          onClick={() => setSelectedPhoto(photo)}
+                          onClick={() => setSelectedPhotoId(photo.id)}
                           className="block w-full text-left focus:outline-none focus:ring-4 focus:ring-inset focus:ring-[#f3dfad]/60"
                           aria-label={`放大查看：${photo.caption}`}
                         >
@@ -741,7 +752,7 @@ export default function HomeClient({
                             <img
                               src={photo.src}
                               alt={photo.name}
-                              className={`h-full w-full object-contain ${photo.imageClass ?? ""}`}
+                              className="h-full w-full object-contain"
                             />
                           </div>
                           <figcaption className="absolute inset-x-0 bottom-0 bg-[#17202b]/88 px-4 py-3 pr-20 font-serif text-base font-bold leading-6 text-white backdrop-blur-sm sm:px-6 sm:py-4 sm:pr-24 sm:text-xl sm:leading-7">
@@ -752,7 +763,7 @@ export default function HomeClient({
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                {photos.length > 1 && (
+                {sortedPhotos.length > 1 && (
                   <>
                     <CarouselPrevious
                       className="left-3 h-10 w-10 border-white/70 bg-white/90 text-[#40513b] hover:bg-white sm:left-4"
@@ -763,7 +774,7 @@ export default function HomeClient({
                       aria-label="下一张照片"
                     />
                     <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-[#17202b]/78 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm sm:bottom-4 sm:right-4 sm:text-sm">
-                      {currentSlide + 1} / {photos.length}
+                      {currentSlide + 1} / {sortedPhotos.length}
                     </span>
                   </>
                 )}
@@ -771,37 +782,20 @@ export default function HomeClient({
             </div>
           )}
           <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3 lg:items-start">
-            {photos.map((photo, index) => (
-              <figure
+            {sortedPhotos.map((photo, index) => (
+              <PhotoCard
                 key={photo.id}
-                className={`relative rounded-sm border border-[#e3dccb] bg-white p-2 pb-4 shadow-xl shadow-[#41533c]/15 transition hover:z-10 hover:scale-[1.02] sm:p-3 sm:pb-5 ${photo.rotation} ${
-                  index === 1 ? "sm:mt-10" : index === 2 ? "sm:mt-3" : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  onDoubleClick={() => setSelectedPhoto(photo)}
-                  onTouchEnd={(event) => handlePhotoTouchEnd(event, photo)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") setSelectedPhoto(photo);
-                  }}
-                  className="block w-full touch-manipulation text-left focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
-                  aria-label={`双击放大查看：${photo.caption}`}
-                  title="双击放大查看"
-                >
-                  <span className="absolute -top-3 left-1/2 h-7 w-24 -translate-x-1/2 rotate-[-3deg] bg-[#f3dfad]/75 shadow-sm" />
-                  <div className="aspect-[4/3] overflow-hidden rounded-[2px] bg-[#eef0ec]">
-                    <img
-                      src={photo.src}
-                      alt={photo.name}
-                      className={`h-full w-full object-cover ${photo.imageClass ?? ""}`}
-                    />
-                  </div>
-                  <figcaption className="mt-3 font-serif text-sm font-bold leading-5 text-[#253024] sm:text-lg sm:leading-6">
-                    {photo.caption}
-                  </figcaption>
-                </button>
-              </figure>
+                photo={photo}
+                comments={commentsByPhotoId[photo.id] ?? []}
+                defaultAuthor={form.name}
+                offsetClass={index === 1 ? "sm:mt-10" : index === 2 ? "sm:mt-3" : ""}
+                onOpen={setSelectedPhotoId}
+                onPhotoChanged={handlePhotoChanged}
+                onCommentAdded={(comment) =>
+                  setPhotoComments((current) => [...current, comment])
+                }
+                onTouchEnd={handlePhotoTouchEnd}
+              />
             ))}
           </div>
         </div>
@@ -810,7 +804,7 @@ export default function HomeClient({
       {selectedPhoto && (
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center bg-[#20251f]/70 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setSelectedPhoto(null)}
+          onClick={() => setSelectedPhotoId(null)}
         >
           <section
             className="relative flex max-h-[92vh] w-full max-w-5xl flex-col rounded-md bg-[#f8f7f2] shadow-2xl shadow-black/25"
@@ -825,7 +819,7 @@ export default function HomeClient({
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedPhoto(null)}
+                onClick={() => setSelectedPhotoId(null)}
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#d8ddd3] bg-white text-[#40513b] transition hover:bg-[#eef3e9] focus:outline-none focus:ring-4 focus:ring-[#b08a55]/25"
                 aria-label="关闭照片查看"
               >
@@ -836,7 +830,7 @@ export default function HomeClient({
               <img
                 src={selectedPhoto.src}
                 alt={selectedPhoto.caption}
-                className={`max-h-[68vh] w-auto max-w-full object-contain ${selectedPhoto.imageClass ?? ""}`}
+                className="max-h-[68vh] w-auto max-w-full object-contain"
               />
             </div>
             <div className="border-t border-[#d8ddd3] px-4 py-3 sm:px-5">
@@ -981,6 +975,7 @@ export default function HomeClient({
               autoFocus
               value={captionDraft}
               onChange={(event) => setCaptionDraft(event.target.value)}
+              maxLength={120}
               className="mt-2 h-11 w-full rounded-md border border-[#cbd4c6] px-3 outline-none transition focus:border-[#6b7f5f] focus:ring-2 focus:ring-[#6b7f5f]/20"
               placeholder="例如：2025 浦江郊野公园烧烤趴"
             />
